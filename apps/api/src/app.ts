@@ -1,8 +1,28 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { WhatsAppNormalizedMessage } from "@valentim/shared";
+import { prisma } from "./lib/prisma.js";
 
-const mockMessages: WhatsAppNormalizedMessage[] = [];
+function normalizeMessageType(value: unknown): WhatsAppNormalizedMessage["messageType"] {
+  const messageType = String(value ?? "DOCUMENT").toUpperCase();
+  const allowed = ["TEXT", "IMAGE", "DOCUMENT", "AUDIO", "VIDEO", "STICKER", "UNKNOWN"];
+
+  return allowed.includes(messageType) ? (messageType as WhatsAppNormalizedMessage["messageType"]) : "UNKNOWN";
+}
+
+async function findDefaultOffice() {
+  const office = await prisma.office.findFirst({
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  if (!office) {
+    throw new Error("Nenhum escritório encontrado. Execute: pnpm --filter api prisma:seed");
+  }
+
+  return office;
+}
 
 export async function buildApp() {
   const app = Fastify({
@@ -14,10 +34,13 @@ export async function buildApp() {
   });
 
   app.get("/health", async () => {
+    const database = await prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 as ok`;
+
     return {
       status: "ok",
       service: "valentim-api",
       mode: "whatsapp-first",
+      database: database[0]?.ok === 1 ? "connected" : "unknown",
       timestamp: new Date().toISOString(),
     };
   });
@@ -34,9 +57,32 @@ export async function buildApp() {
   });
 
   app.get("/api/whatsapp/messages", async () => {
+    const messages = await prisma.whatsAppMessage.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 50,
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        company: {
+          select: {
+            id: true,
+            legalName: true,
+            cnpj: true,
+          },
+        },
+      },
+    });
+
     return {
-      total: mockMessages.length,
-      data: mockMessages,
+      total: messages.length,
+      data: messages,
     };
   });
 
@@ -52,28 +98,117 @@ export async function buildApp() {
 
   app.post("/api/webhooks/whatsapp", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
+    const office = await findDefaultOffice();
+    const phone = String(body.phone ?? "5521999999999");
+    const providerMessageId = String(body.providerMessageId ?? `mock-${Date.now()}`);
+    const messageType = normalizeMessageType(body.messageType);
 
-    const message: WhatsAppNormalizedMessage = {
-      provider: "mock",
-      providerMessageId: String(body.providerMessageId ?? `mock-${Date.now()}`),
-      phone: String(body.phone ?? "5521999999999"),
-      direction: "INBOUND",
-      messageType: String(body.messageType ?? "DOCUMENT") as WhatsAppNormalizedMessage["messageType"],
-      body: typeof body.body === "string" ? body.body : undefined,
-      mediaId: typeof body.mediaId === "string" ? body.mediaId : undefined,
-      mediaUrl: typeof body.mediaUrl === "string" ? body.mediaUrl : undefined,
-      mimeType: typeof body.mimeType === "string" ? body.mimeType : undefined,
-      fileName: typeof body.fileName === "string" ? body.fileName : undefined,
-      receivedAt: new Date().toISOString(),
-      rawPayload: body,
-    };
+    const client = await prisma.client.findFirst({
+      where: {
+        officeId: office.id,
+        phone,
+      },
+      include: {
+        companies: {
+          where: {
+            status: "ACTIVE",
+          },
+          take: 1,
+        },
+      },
+    });
 
-    mockMessages.unshift(message);
+    const company = client?.companies[0];
+
+    const message = await prisma.whatsAppMessage.upsert({
+      where: {
+        provider_providerMessageId: {
+          provider: "MOCK",
+          providerMessageId,
+        },
+      },
+      update: {
+        rawPayload: body,
+        processingStatus: "QUEUED",
+      },
+      create: {
+        officeId: office.id,
+        clientId: client?.id,
+        companyId: company?.id,
+        provider: "MOCK",
+        providerMessageId,
+        phone,
+        direction: "INBOUND",
+        messageType,
+        body: typeof body.body === "string" ? body.body : undefined,
+        mediaId: typeof body.mediaId === "string" ? body.mediaId : undefined,
+        mediaUrl: typeof body.mediaUrl === "string" ? body.mediaUrl : undefined,
+        mimeType: typeof body.mimeType === "string" ? body.mimeType : undefined,
+        fileName: typeof body.fileName === "string" ? body.fileName : undefined,
+        rawPayload: body,
+        processed: false,
+        processingStatus: "QUEUED",
+      },
+    });
+
+    await prisma.conversationState.upsert({
+      where: {
+        officeId_phone: {
+          officeId: office.id,
+          phone,
+        },
+      },
+      update: {
+        clientId: client?.id,
+        companyId: company?.id,
+        state: "PROCESSING",
+        lastInboundAt: new Date(),
+        lastMessagePreview:
+          typeof body.body === "string"
+            ? body.body.slice(0, 180)
+            : `${messageType} recebido${typeof body.fileName === "string" ? `: ${body.fileName}` : ""}`,
+      },
+      create: {
+        officeId: office.id,
+        clientId: client?.id,
+        companyId: company?.id,
+        phone,
+        state: "PROCESSING",
+        lastInboundAt: new Date(),
+        lastMessagePreview:
+          typeof body.body === "string"
+            ? body.body.slice(0, 180)
+            : `${messageType} recebido${typeof body.fileName === "string" ? `: ${body.fileName}` : ""}`,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        officeId: office.id,
+        action: "WHATSAPP_MESSAGE_RECEIVED",
+        entity: "WhatsAppMessage",
+        entityId: message.id,
+        metadata: {
+          phone,
+          providerMessageId,
+          messageType,
+          hasClientMatch: Boolean(client),
+        },
+      },
+    });
 
     return reply.code(202).send({
       accepted: true,
       queued: true,
+      persisted: true,
       message,
+      clientMatch: client
+        ? {
+            id: client.id,
+            name: client.name,
+            companyId: company?.id ?? null,
+          }
+        : null,
       pipeline: [
         { id: "01", name: "RECEPCAO", status: "done" },
         { id: "02", name: "DOWNLOAD", status: "pending" },
