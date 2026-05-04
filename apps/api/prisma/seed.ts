@@ -3,6 +3,57 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+async function ensureDocumentRequest(input: {
+  officeId: string;
+  clientId: string;
+  companyId: string;
+  requestedById: string;
+  title: string;
+  documentType: "DAS_PAGO" | "EXTRATO_BANCARIO";
+  referenceMonth: number;
+  referenceYear: number;
+  dueDate: Date;
+}) {
+  const existing = await prisma.documentRequest.findFirst({
+    where: {
+      officeId: input.officeId,
+      clientId: input.clientId,
+      companyId: input.companyId,
+      documentType: input.documentType,
+      referenceMonth: input.referenceMonth,
+      referenceYear: input.referenceYear,
+    },
+  });
+
+  if (existing) {
+    return prisma.documentRequest.update({
+      where: {
+        id: existing.id,
+      },
+      data: {
+        title: input.title,
+        dueDate: input.dueDate,
+        requestedById: input.requestedById,
+      },
+    });
+  }
+
+  return prisma.documentRequest.create({
+    data: {
+      officeId: input.officeId,
+      clientId: input.clientId,
+      companyId: input.companyId,
+      title: input.title,
+      documentType: input.documentType,
+      referenceMonth: input.referenceMonth,
+      referenceYear: input.referenceYear,
+      dueDate: input.dueDate,
+      status: "PENDING",
+      requestedById: input.requestedById,
+    },
+  });
+}
+
 async function main() {
   const passwordHash = await bcrypt.hash("Admin@123", 10);
 
@@ -102,34 +153,28 @@ async function main() {
     },
   });
 
-  await prisma.documentRequest.createMany({
-    data: [
-      {
-        officeId: office.id,
-        clientId: client.id,
-        companyId: company.id,
-        title: "DAS Simples Nacional — Abril/2026",
-        documentType: "DAS_PAGO",
-        referenceMonth: 4,
-        referenceYear: 2026,
-        dueDate: new Date("2026-05-20T03:00:00.000Z"),
-        status: "PENDING",
-        requestedById: admin.id,
-      },
-      {
-        officeId: office.id,
-        clientId: client.id,
-        companyId: company.id,
-        title: "Extrato bancário — Abril/2026",
-        documentType: "EXTRATO_BANCARIO",
-        referenceMonth: 4,
-        referenceYear: 2026,
-        dueDate: new Date("2026-05-10T03:00:00.000Z"),
-        status: "PENDING",
-        requestedById: admin.id,
-      },
-    ],
-    skipDuplicates: true,
+  await ensureDocumentRequest({
+    officeId: office.id,
+    clientId: client.id,
+    companyId: company.id,
+    requestedById: admin.id,
+    title: "DAS Simples Nacional — Abril/2026",
+    documentType: "DAS_PAGO",
+    referenceMonth: 4,
+    referenceYear: 2026,
+    dueDate: new Date("2026-05-20T03:00:00.000Z"),
+  });
+
+  await ensureDocumentRequest({
+    officeId: office.id,
+    clientId: client.id,
+    companyId: company.id,
+    requestedById: admin.id,
+    title: "Extrato bancário — Abril/2026",
+    documentType: "EXTRATO_BANCARIO",
+    referenceMonth: 4,
+    referenceYear: 2026,
+    dueDate: new Date("2026-05-10T03:00:00.000Z"),
   });
 
   await prisma.conversationState.upsert({
