@@ -1,6 +1,13 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { WhatsAppNormalizedMessage } from "@valentim/shared";
+import { authRoutes } from "./routes/auth.routes.js";
+import { clientsRoutes } from "./routes/clients.routes.js";
+import { companiesRoutes } from "./routes/companies.routes.js";
+import { dashboardRoutes } from "./routes/dashboard.routes.js";
+import { documentReviewRoutes } from "./routes/document-review.routes.js";
+import { documentsRoutes } from "./routes/documents.routes.js";
+import { isHttpError } from "./lib/http-error.js";
 import { prisma } from "./lib/prisma.js";
 
 function normalizeMessageType(value: unknown): WhatsAppNormalizedMessage["messageType"] {
@@ -29,9 +36,31 @@ export async function buildApp() {
     logger: true,
   });
 
+  app.setErrorHandler((error, _request, reply) => {
+    if (isHttpError(error)) {
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        details: error.details,
+      });
+    }
+
+    app.log.error(error);
+
+    return reply.code(500).send({
+      error: "Erro interno do servidor.",
+    });
+  });
+
   await app.register(cors, {
     origin: true,
   });
+
+  await app.register(authRoutes);
+  await app.register(dashboardRoutes);
+  await app.register(clientsRoutes);
+  await app.register(companiesRoutes);
+  await app.register(documentsRoutes);
+  await app.register(documentReviewRoutes);
 
   app.get("/health", async () => {
     const database = await prisma.$queryRaw<Array<{ ok: number }>>`SELECT 1 as ok`;
