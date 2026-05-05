@@ -3,6 +3,7 @@ import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { api } from '../services/api';
 import type { Color } from '../types/ui';
+import './TasksPage.css';
 
 interface Task {
   id?: string;
