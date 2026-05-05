@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { prisma } from '../lib/prisma';
+import { analyzeDocument } from '../lib/ai';
 import { redisConnection, MediaDownloadJobData } from '../lib/queue';
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,45 @@ async function uploadToR2(key: string, buffer: Buffer, contentType: string): Pro
 }
 
 // ---------------------------------------------------------------------------
+// Persistência da análise real
+// ---------------------------------------------------------------------------
+
+async function upsertAiAnalysisFromResult(documentFileId: string, result: Awaited<ReturnType<typeof analyzeDocument>>) {
+  const file = await prisma.documentFile.findUnique({
+    where: { id: documentFileId },
+    select: { documentRequestId: true }
+  });
+
+  const existing = await prisma.aIAnalysis.findFirst({
+    where: { documentFileId },
+    orderBy: { analyzedAt: 'desc' }
+  });
+
+  const data = {
+    documentRequestId: file?.documentRequestId ?? null,
+    documentFileId,
+    documentType: result.documentType,
+    competence: result.competence,
+    cnpj: result.cnpj,
+    totalValue: result.totalValue ?? null,
+    confidence: result.confidence,
+    summary: result.summary,
+    flags: result.flags,
+    model: result.model
+  };
+
+  if (existing) {
+    await prisma.aIAnalysis.update({
+      where: { id: existing.id },
+      data
+    });
+    return;
+  }
+
+  await prisma.aIAnalysis.create({ data });
+}
+
+// ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
 
@@ -131,21 +171,27 @@ async function processMediaDownload(job: Job<MediaDownloadJobData>) {
   const { buffer, contentType } = await downloadMetaMedia(mediaInfo.url);
   job.log(`Arquivo baixado — ${buffer.length} bytes`);
 
-  await job.updateProgress(60);
+  await job.updateProgress(55);
   const storageKey = buildStorageKey(documentFileId, filename);
-  const storageUrl = await uploadToR2(storageKey, buffer, contentType || mimeType);
+  const finalContentType = contentType || mimeType;
+  const storageUrl = await uploadToR2(storageKey, buffer, finalContentType);
   job.log(`Upload concluído — chave: ${storageKey}`);
 
-  await job.updateProgress(90);
+  await job.updateProgress(70);
   await prisma.documentFile.update({
     where: { id: documentFileId },
     data: { storageKey: storageUrl }
   });
 
-  await job.updateProgress(100);
-  job.log(`DocumentFile ${documentFileId} atualizado com storage permanente`);
+  await job.updateProgress(82);
+  const aiResult = await analyzeDocument(buffer, finalContentType, filename);
+  await upsertAiAnalysisFromResult(documentFileId, aiResult);
+  job.log(`Análise IA concluída — ${aiResult.model} / confiança ${aiResult.confidence}`);
 
-  return { storageKey, bytes: buffer.length };
+  await job.updateProgress(100);
+  job.log(`DocumentFile ${documentFileId} atualizado com storage permanente e análise real`);
+
+  return { storageKey, bytes: buffer.length, aiModel: aiResult.model, confidence: aiResult.confidence };
 }
 
 export function startMediaDownloadWorker() {
@@ -155,7 +201,9 @@ export function startMediaDownloadWorker() {
   });
 
   worker.on('completed', (job, result) => {
-    console.log(`[media-worker] Job ${job.id} concluído — ${result.bytes} bytes → ${result.storageKey}`);
+    console.log(
+      `[media-worker] Job ${job.id} concluído — ${result.bytes} bytes → ${result.storageKey} | IA ${result.aiModel} (${result.confidence})`
+    );
   });
 
   worker.on('failed', (job, err) => {
