@@ -20,7 +20,7 @@ const clientsRoutes: FastifyPluginAsync = async (app) => {
       include: {
         companies: {
           include: {
-            DocumentRequest: true
+          documentRequests: true
           }
         }
       }
