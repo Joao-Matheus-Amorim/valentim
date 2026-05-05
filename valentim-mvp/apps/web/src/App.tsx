@@ -4,9 +4,10 @@ import { navigationItems } from './data/navigation';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
+import { TasksPage } from './pages/TasksPage';
 import type { AppSectionId } from './types/ui';
 
-const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture'>, JSX.Element> = {
+const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks'>, JSX.Element> = {
   clients: <ModulePlaceholderPage title="Clientes" badge="Operacao" color="green" description="Central para cadastrar e acompanhar clientes do escritorio, telefones e empresas vinculadas." nextSteps={['Consumir GET /api/clients.', 'Adicionar criacao e edicao de cliente.', 'Exibir empresas e pendencias por cliente.']} />,
   companies: <ModulePlaceholderPage title="Empresas" badge="Cadastro" color="sky" description="Area para visualizar empresas vinculadas aos clientes, CNPJ, regime tributario e documentos esperados." nextSteps={['Consumir GET /api/companies.', 'Criar formulario de nova empresa.', 'Mostrar documentos mensais por empresa.']} />,
   documents: <ModulePlaceholderPage title="Documentos" badge="Fila" color="amber" description="Fila de solicitacoes contabeis por empresa, competencia, vencimento e status de envio." nextSteps={['Consumir GET /api/documents.', 'Criar tela de solicitacao de documentos.', 'Exibir status PENDING, SENT, UNDER_REVIEW, APPROVED e OVERDUE.']} />,
@@ -22,6 +23,7 @@ export default function App() {
 
   const activePage = useMemo(() => {
     if (active === 'dashboard') return <DashboardPage />;
+    if (active === 'tasks') return <TasksPage />;
     if (active === 'architecture') return <ArchitecturePage />;
     return modulePages[active];
   }, [active]);
