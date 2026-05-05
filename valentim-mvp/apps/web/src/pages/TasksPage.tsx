@@ -1,19 +1,83 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
+import { api } from '../services/api';
+import type { Color } from '../types/ui';
 
-const taskQueue = [
-  { title: 'Cobrar DAS de abril', client: 'Padaria do Joao', priority: 'Urgente', status: 'Aguardando cliente' },
-  { title: 'Revisar documento analisado pela IA', client: 'Clinica Santa Luzia', priority: 'Alta', status: 'Aguardando revisao' },
-  { title: 'Enviar proposta de consultoria', client: 'Oficina Almeida', priority: 'Media', status: 'Pendente' },
-  { title: 'Conferir cobranca vencida', client: 'Mercado Central', priority: 'Alta', status: 'Em andamento' },
+interface Task {
+  id?: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  source?: string;
+  dueDate?: string | null;
+  clientId?: string | null;
+  companyId?: string | null;
+}
+
+const fallbackTasks: Task[] = [
+  { title: 'Cobrar DAS de abril', priority: 'URGENT', status: 'WAITING_CLIENT', source: 'document' },
+  { title: 'Revisar documento analisado pela IA', priority: 'HIGH', status: 'WAITING_REVIEW', source: 'ai' },
+  { title: 'Enviar proposta de consultoria', priority: 'MEDIUM', status: 'PENDING', source: 'proposal' },
+  { title: 'Conferir cobranca vencida', priority: 'HIGH', status: 'IN_PROGRESS', source: 'finance' },
 ];
 
+function priorityLabel(priority: string) {
+  const labels: Record<string, string> = { LOW: 'Baixa', MEDIUM: 'Media', HIGH: 'Alta', URGENT: 'Urgente' };
+  return labels[priority] || priority;
+}
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: 'Pendente',
+    IN_PROGRESS: 'Em andamento',
+    WAITING_CLIENT: 'Aguardando cliente',
+    WAITING_DOCUMENT: 'Aguardando documento',
+    WAITING_REVIEW: 'Aguardando revisao',
+    DONE: 'Concluida',
+    OVERDUE: 'Atrasada',
+    CANCELED: 'Cancelada',
+  };
+  return labels[status] || status;
+}
+
+function priorityColor(priority: string): Color {
+  if (priority === 'URGENT') return 'rose';
+  if (priority === 'HIGH') return 'amber';
+  if (priority === 'LOW') return 'slate';
+  return 'sky';
+}
+
 export function TasksPage() {
+  const [tasks, setTasks] = useState<Task[]>(fallbackTasks);
+  const [source, setSource] = useState<'api' | 'fallback'>('fallback');
+
+  useEffect(() => {
+    api.get<Task[]>('/tasks')
+      .then((response) => {
+        if (Array.isArray(response.data)) {
+          setTasks(response.data.length ? response.data : fallbackTasks);
+          setSource(response.data.length ? 'api' : 'fallback');
+        }
+      })
+      .catch(() => setSource('fallback'));
+  }, []);
+
+  const metrics = useMemo(() => {
+    const pending = tasks.filter((task) => !['DONE', 'CANCELED'].includes(task.status)).length;
+    const urgent = tasks.filter((task) => task.priority === 'URGENT' || task.status === 'OVERDUE').length;
+    const review = tasks.filter((task) => task.status === 'WAITING_REVIEW' || task.source === 'ai').length;
+    const done = tasks.filter((task) => task.status === 'DONE').length;
+    return { pending, urgent, review, done };
+  }, [tasks]);
+
   return (
     <div className="stack">
       <div className="page-title">
         <h2>Tarefas Inteligentes</h2>
         <Badge color="green">Central operacional</Badge>
+        {source === 'fallback' ? <Badge color="amber">Demo ate migration</Badge> : <Badge color="emerald">API ativa</Badge>}
       </div>
 
       <Card color="green">
@@ -27,20 +91,20 @@ export function TasksPage() {
       </Card>
 
       <div className="grid four">
-        <Card color="amber" title="Pendentes"><div className="metric">12</div><p>Tarefas abertas aguardando acao.</p></Card>
-        <Card color="rose" title="Criticas"><div className="metric">3</div><p>Itens vencidos ou proximos do prazo.</p></Card>
-        <Card color="violet" title="IA"><div className="metric">5</div><p>Analises que exigem revisao humana.</p></Card>
-        <Card color="emerald" title="Concluidas"><div className="metric">18</div><p>Tarefas finalizadas nesta semana.</p></Card>
+        <Card color="amber" title="Pendentes"><div className="metric">{metrics.pending}</div><p>Tarefas abertas aguardando acao.</p></Card>
+        <Card color="rose" title="Criticas"><div className="metric">{metrics.urgent}</div><p>Itens vencidos ou proximos do prazo.</p></Card>
+        <Card color="violet" title="IA"><div className="metric">{metrics.review}</div><p>Analises que exigem revisao humana.</p></Card>
+        <Card color="emerald" title="Concluidas"><div className="metric">{metrics.done}</div><p>Tarefas finalizadas.</p></Card>
       </div>
 
       <Card title="Fila prioritaria de hoje" color="slate">
         <div className="table-list">
-          {taskQueue.map((task) => (
-            <div className="table-row" key={task.title}>
+          {tasks.map((task, index) => (
+            <div className="table-row" key={task.id || `${task.title}-${index}`}>
               <strong>{task.title}</strong>
-              <span>{task.client}</span>
-              <Badge color={task.priority === 'Urgente' ? 'rose' : task.priority === 'Alta' ? 'amber' : 'sky'}>{task.priority}</Badge>
-              <span>{task.status}</span>
+              <span>{task.source || 'manual'}</span>
+              <Badge color={priorityColor(task.priority)}>{priorityLabel(task.priority)}</Badge>
+              <span>{statusLabel(task.status)}</span>
             </div>
           ))}
         </div>
