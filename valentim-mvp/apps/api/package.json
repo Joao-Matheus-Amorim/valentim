@@ -1,5 +1,5 @@
 {
-  "name": "valentim-api",
+  "name": "api",
   "private": true,
   "version": "1.0.0",
   "main": "dist/server.js",

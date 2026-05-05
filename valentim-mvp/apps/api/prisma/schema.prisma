@@ -45,12 +45,12 @@ enum WhatsAppDirection {
 }
 
 model Office {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-  clients   Client[]
+  id               String            @id @default(uuid())
+  name             String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  users            User[]
+  clients          Client[]
   whatsAppMessages WhatsAppMessage[]
 }
 
@@ -67,66 +67,65 @@ model User {
 }
 
 model Client {
-  id               String     @id @default(uuid())
-  officeId         String
-  office           Office     @relation(fields: [officeId], references: [id])
-  name             String
-  phone            String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  companies        Company[]
-  documentRequests DocumentRequest[]
-  whatsAppMessages WhatsAppMessage[]
+  id                 String              @id @default(uuid())
+  officeId           String
+  office             Office              @relation(fields: [officeId], references: [id])
+  name               String
+  phone              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  companies          Company[]
+  whatsAppMessages   WhatsAppMessage[]
   conversationStates ConversationState[]
-  proposals        Proposal[]
+  proposals          Proposal[]
   unmatchedDocuments UnmatchedDocument[]
 }
 
 model Company {
-  id               String     @id @default(uuid())
-  clientId         String
-  client           Client     @relation(fields: [clientId], references: [id])
-  name             String
-  cnpj             String?
-  regime           String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  documentRequests DocumentRequest[]
-  deadlines        Deadline[]
-  charges          Charge[]
+  id              String            @id @default(uuid())
+  clientId        String
+  client          Client            @relation(fields: [clientId], references: [id])
+  name            String
+  cnpj            String?
+  regime          String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deadlines       Deadline[]
+  charges         Charge[]
+  DocumentRequest DocumentRequest[]
 }
 
 model DocumentRequest {
-  id              String         @id @default(uuid())
-  companyId       String
-  company         Company        @relation(fields: [companyId], references: [id])
-  documentType    String
-  competence      String?
-  dueDate         DateTime?
-  status          DocumentStatus @default(PENDING)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  files           DocumentFile[]
-  aiAnalyses      AIAnalysis[]
+  id                 String              @id @default(uuid())
+  companyId          String
+  company            Company             @relation(fields: [companyId], references: [id])
+  documentType       String
+  competence         String?
+  dueDate            DateTime?
+  status             DocumentStatus      @default(PENDING)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  files              DocumentFile[]
+  aiAnalyses         AIAnalysis[]
   unmatchedDocuments UnmatchedDocument[]
 }
 
 model DocumentFile {
-  id                 String        @id @default(uuid())
-  documentRequestId  String?
-  documentRequest    DocumentRequest? @relation(fields: [documentRequestId], references: [id])
-  filename           String
-  mimeType           String
-  storageKey         String
-  createdAt          DateTime @default(now())
-  aiAnalyses         AIAnalysis[]
+  id                String           @id @default(uuid())
+  documentRequestId String?
+  documentRequest   DocumentRequest? @relation(fields: [documentRequestId], references: [id])
+  filename          String
+  mimeType          String
+  storageKey        String
+  createdAt         DateTime         @default(now())
+  aiAnalyses        AIAnalysis[]
 }
 
 model AIAnalysis {
-  id                String        @id @default(uuid())
+  id                String           @id @default(uuid())
   documentRequestId String?
   documentFileId    String
-  documentFile      DocumentFile  @relation(fields: [documentFileId], references: [id])
+  documentFile      DocumentFile     @relation(fields: [documentFileId], references: [id])
   documentRequest   DocumentRequest? @relation(fields: [documentRequestId], references: [id])
   documentType      String
   competence        String?
@@ -136,50 +135,50 @@ model AIAnalysis {
   summary           String?
   flags             String[]
   model             String
-  analyzedAt        DateTime @default(now())
+  analyzedAt        DateTime         @default(now())
 }
 
 model ConversationState {
-  id                String         @id @default(uuid())
-  clientId          String
-  client            Client         @relation(fields: [clientId], references: [id])
-  phone             String
-  status            ConversationStatus @default(IDLE)
-  currentRequestId  String?
-  pendingRequests   String[]
-  lastMessageAt     DateTime?
-  updatedAt         DateTime @updatedAt
+  id               String             @id @default(uuid())
+  clientId         String
+  client           Client             @relation(fields: [clientId], references: [id])
+  phone            String
+  status           ConversationStatus @default(IDLE)
+  currentRequestId String?
+  pendingRequests  String[]
+  lastMessageAt    DateTime?
+  updatedAt        DateTime           @updatedAt
 }
 
 model WhatsAppMessage {
-  id             String    @id @default(uuid())
-  officeId       String
-  office         Office    @relation(fields: [officeId], references: [id])
-  clientId       String?
-  client         Client?   @relation(fields: [clientId], references: [id])
+  id                String              @id @default(uuid())
+  officeId          String
+  office            Office              @relation(fields: [officeId], references: [id])
+  clientId          String?
+  client            Client?             @relation(fields: [clientId], references: [id])
   providerMessageId String
-  phone          String
-  direction      WhatsAppDirection
-  messageType    WhatsAppMessageType
-  body           String?
-  mediaKey       String?
-  mediaUrl       String?
-  receivedAt     DateTime  @default(now())
-  processed      Boolean   @default(false)
+  phone             String
+  direction         WhatsAppDirection
+  messageType       WhatsAppMessageType
+  body              String?
+  mediaKey          String?
+  mediaUrl          String?
+  receivedAt        DateTime            @default(now())
+  processed         Boolean             @default(false)
 }
 
 model UnmatchedDocument {
-  id                String    @id @default(uuid())
+  id                String           @id @default(uuid())
   documentRequestId String?
   documentRequest   DocumentRequest? @relation(fields: [documentRequestId], references: [id])
   clientId          String?
-  client            Client?   @relation(fields: [clientId], references: [id])
+  client            Client?          @relation(fields: [clientId], references: [id])
   phone             String
   storageKey        String
   aiAnalysis        Json?
-  triaged           Boolean   @default(false)
+  triaged           Boolean          @default(false)
   staffNote         String?
-  receivedAt        DateTime  @default(now())
+  receivedAt        DateTime         @default(now())
 }
 
 model Deadline {
@@ -194,24 +193,24 @@ model Deadline {
 }
 
 model Charge {
-  id        String   @id @default(uuid())
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
   description String
-  amount    Decimal
-  dueDate   DateTime
-  status    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  amount      Decimal
+  dueDate     DateTime
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Proposal {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
-  title     String
+  id          String   @id @default(uuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  title       String
   description String
-  value     Decimal
-  status    String
-  createdAt DateTime @default(now())
+  value       Decimal
+  status      String
+  createdAt   DateTime @default(now())
 }
