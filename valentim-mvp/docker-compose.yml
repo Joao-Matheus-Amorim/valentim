@@ -1,0 +1,23 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:15
+    container_name: valentim-postgres
+    environment:
+      POSTGRES_USER: valentim
+      POSTGRES_PASSWORD: valentim
+      POSTGRES_DB: valentim
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:6
+    container_name: valentim-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+volumes:
+  postgres_data:
+  redis_data:

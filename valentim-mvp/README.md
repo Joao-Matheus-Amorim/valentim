@@ -1,41 +1,55 @@
-# Valentim MVP — WhatsApp-first
+# Valentim – Sistema Contábil WhatsApp-first
 
-Projeto executável do Valentim dentro do repositório.
+Este projeto é um sistema contábil orientado a WhatsApp. Os clientes enviam documentos via WhatsApp e o sistema recebe, analisa e organiza de forma automatizada. O contador e a equipe utilizam um dashboard web para acompanhar as pendências de documentos, prazos e cobranças.
 
-## Rodar local
+## Estrutura do projeto
+
+- **apps/api** – API em Fastify (TypeScript) com Prisma como ORM.
+- **apps/web** – Dashboard web em React com Vite.
+- **packages/shared** – Tipos e enums compartilhados.
+- **docker-compose.yml** – Serviços do banco de dados (PostgreSQL) e Redis para fila assíncrona (ainda não utilizada).
+- **prisma/schema.prisma** – Modelagem do banco.
+
+## Executando localmente
+
+Pré-requisitos: Node.js 20+, pnpm, Docker Desktop.
 
 ```bash
-cd valentim-mvp
+# Instale dependências
 pnpm install
+
+# Copie .env de exemplo
 cp .env.example .env
+
+# Suba banco de dados e Redis
 docker compose up -d
-pnpm --filter api prisma generate
-pnpm --filter api prisma migrate dev --name init
-pnpm --filter api prisma db seed
+
+# Gere Prisma Client
+pnpm --filter api prisma:generate
+
+# Execute migrações iniciais
+pnpm --filter api prisma:migrate -- --name init
+
+# Popule dados de exemplo
+pnpm --filter api prisma:seed
+
+# Rode API e Web em paralelo
 pnpm dev
 ```
 
-PowerShell:
+A API estará em `http://localhost:3333` e o dashboard web em `http://localhost:5173`.
 
-```powershell
-Copy-Item .env.example .env
-```
+Usuário demo:
 
-Acessos:
+- **Email:** admin@valentim.local
+- **Senha:** Admin@123
 
-- Web: http://localhost:5173
-- API: http://localhost:3333/health
+## Próximos passos
 
-Login seed:
+Este projeto serve como base para um MVP. Futuros desenvolvimentos incluem:
 
-- admin@valentim.local
-- Admin@123
-
-## Inclui
-
-- API Fastify + Prisma + JWT
-- Web React + Vite
-- PostgreSQL + Redis via Docker
-- Webhook WhatsApp mockado
-- IA mockada
-- CRUD base de clientes, empresas, documentos, prazos, financeiro e propostas
+- Integração real com a API oficial do WhatsApp (Meta Cloud API).
+- Integração com serviços de IA para analisar documentos (Ex.: Anthropic Claude, OpenAI GPT-4o).
+- Worker assíncrono com BullMQ e Redis para processar mensagens e documentos.
+- Funcionalidades avançadas no dashboard: upload de documentos, relatórios, contratos, propostas.
+- Segurança e boas práticas de deploy.

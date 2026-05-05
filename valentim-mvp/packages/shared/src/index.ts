@@ -1,0 +1,24 @@
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  STAFF = 'STAFF',
+  CLIENT = 'CLIENT'
+}
+
+export enum DocumentStatus {
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  OVERDUE = 'OVERDUE'
+}
+
+export enum ConversationStatus {
+  IDLE = 'IDLE',
+  WAITING_DOC = 'WAITING_DOC',
+  PROCESSING = 'PROCESSING',
+  CONFIRMED = 'CONFIRMED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  REMINDER_SENT = 'REMINDER_SENT',
+  OVERDUE = 'OVERDUE'
+}
