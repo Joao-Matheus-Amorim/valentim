@@ -4,6 +4,7 @@ export type Color = 'green' | 'teal' | 'amber' | 'violet' | 'rose' | 'sky' | 'sl
 
 export type AppSectionId =
   | 'dashboard'
+  | 'tasks'
   | 'architecture'
   | 'clients'
   | 'companies'
