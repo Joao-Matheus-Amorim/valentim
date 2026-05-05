@@ -3,6 +3,28 @@
   justify-content: space-between;
 }
 
+.dashboard-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-refresh {
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  border-radius: 0.75rem;
+  background: rgba(30, 41, 59, 0.52);
+  color: #cbd5e1;
+  padding: 0.48rem 0.72rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.dashboard-refresh:hover {
+  filter: brightness(1.08);
+}
+
 .dashboard-priority-list {
   display: grid;
   gap: 0.6rem;
@@ -61,5 +83,9 @@
   .dashboard-priority-item {
     display: grid;
     justify-content: stretch;
+  }
+
+  .dashboard-actions {
+    justify-content: flex-start;
   }
 }
