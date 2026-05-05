@@ -2,7 +2,8 @@ import type { NavItem } from '../types/ui';
 
 export const navigationItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '▣' },
-  { id: 'architecture', label: 'Arquitetura', icon: '⬡', tag: 'NOVO' },
+  { id: 'tasks', label: 'Tarefas', icon: '✓', tag: 'NOVO' },
+  { id: 'architecture', label: 'Arquitetura', icon: '⬡' },
   { id: 'clients', label: 'Clientes', icon: '◔' },
   { id: 'companies', label: 'Empresas', icon: '▦' },
   { id: 'documents', label: 'Documentos', icon: '▤' },
