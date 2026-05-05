@@ -10,7 +10,8 @@
     "prisma": "prisma",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "ts-node --transpile-only prisma/seed.ts"
+    "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
+    "prisma:seed:tasks": "ts-node --transpile-only prisma/seed-tasks.ts"
   },
   "dependencies": {
     "@fastify/cors": "^8.5.0",
