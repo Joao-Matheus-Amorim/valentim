@@ -6,6 +6,7 @@ import { navigationItems } from './data/navigation';
 import { getStoredToken } from './services/api';
 import { getMe, logout } from './services/auth';
 import { ArchitecturePage } from './pages/ArchitecturePage';
+import { ClientsPage } from './pages/ClientsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
@@ -13,8 +14,7 @@ import { TasksPage } from './pages/TasksPage';
 import type { AuthUser } from './types/auth';
 import type { AppSectionId } from './types/ui';
 
-const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks'>, JSX.Element> = {
-  clients: <ModulePlaceholderPage title="Clientes" badge="Operacao" color="green" description="Central para cadastrar e acompanhar clientes do escritorio, telefones e empresas vinculadas." nextSteps={['Consumir GET /api/clients.', 'Adicionar criacao e edicao de cliente.', 'Exibir empresas e pendencias por cliente.']} />,
+const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks' | 'clients'>, JSX.Element> = {
   companies: <ModulePlaceholderPage title="Empresas" badge="Cadastro" color="sky" description="Area para visualizar empresas vinculadas aos clientes, CNPJ, regime tributario e documentos esperados." nextSteps={['Consumir GET /api/companies.', 'Criar formulario de nova empresa.', 'Mostrar documentos mensais por empresa.']} />,
   documents: <ModulePlaceholderPage title="Documentos" badge="Fila" color="amber" description="Fila de solicitacoes contabeis por empresa, competencia, vencimento e status de envio." nextSteps={['Consumir GET /api/documents.', 'Criar tela de solicitacao de documentos.', 'Exibir status PENDING, SENT, UNDER_REVIEW, APPROVED e OVERDUE.']} />,
   whatsapp: <ModulePlaceholderPage title="WhatsApp" badge="Mensagens" color="green" description="Inbox operacional das mensagens recebidas e enviadas pelo canal do escritorio." nextSteps={['Criar GET /api/whatsapp/messages.', 'Listar conversas por cliente e telefone.', 'Adicionar envio de templates mockados.']} />,
@@ -41,6 +41,7 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
   const activePage = useMemo(() => {
     if (active === 'dashboard') return <DashboardPage />;
     if (active === 'tasks') return <TasksPage />;
+    if (active === 'clients') return <ClientsPage />;
     if (active === 'architecture') return <ArchitecturePage />;
     return modulePages[active];
   }, [active]);
