@@ -1,17 +1,34 @@
-import { randomUUID } from 'node:crypto';
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 
-const VALID_STATUS = ['PENDING', 'IN_PROGRESS', 'WAITING_CLIENT', 'WAITING_DOCUMENT', 'WAITING_REVIEW', 'DONE', 'OVERDUE', 'CANCELED'];
-const VALID_PRIORITY = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+const taskStatuses = [
+  'PENDING',
+  'IN_PROGRESS',
+  'WAITING_CLIENT',
+  'WAITING_DOCUMENT',
+  'WAITING_REVIEW',
+  'DONE',
+  'OVERDUE',
+  'CANCELED'
+];
 
-function safeStatus(value: unknown) {
-  return typeof value === 'string' && VALID_STATUS.includes(value) ? value : 'PENDING';
+const taskPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+
+function normalizeStatus(status: unknown) {
+  if (typeof status === 'string' && taskStatuses.includes(status)) {
+    return status;
+  }
+
+  return 'PENDING';
 }
 
-function safePriority(value: unknown) {
-  return typeof value === 'string' && VALID_PRIORITY.includes(value) ? value : 'MEDIUM';
+function normalizePriority(priority: unknown) {
+  if (typeof priority === 'string' && taskPriorities.includes(priority)) {
+    return priority;
+  }
+
+  return 'MEDIUM';
 }
 
 const tasksRoutes: FastifyPluginAsync = async (app) => {
@@ -19,30 +36,65 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
     const { officeId } = (request as any).user;
     const { status, priority, clientId, companyId } = request.query as any;
 
-    const filters: string[] = ['"officeId" = $1'];
-    const values: unknown[] = [officeId];
+    const tasks = await prisma.task.findMany({
+      where: {
+        officeId,
+        ...(status ? { status: normalizeStatus(status) as any } : {}),
+        ...(priority ? { priority: normalizePriority(priority) as any } : {}),
+        ...(clientId ? { clientId } : {}),
+        ...(companyId ? { companyId } : {})
+      },
+      include: {
+        client: true,
+        company: true,
+        documentRequest: true,
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      },
+      orderBy: [
+        { dueDate: 'asc' },
+        { createdAt: 'desc' }
+      ]
+    });
 
-    if (status) {
-      values.push(status);
-      filters.push(`status = $${values.length}`);
-    }
-    if (priority) {
-      values.push(priority);
-      filters.push(`priority = $${values.length}`);
-    }
-    if (clientId) {
-      values.push(clientId);
-      filters.push('"clientId" = $' + values.length);
-    }
-    if (companyId) {
-      values.push(companyId);
-      filters.push('"companyId" = $' + values.length);
+    return tasks;
+  });
+
+  app.get('/api/tasks/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const { officeId } = (request as any).user;
+    const { id } = request.params as any;
+
+    const task = await prisma.task.findFirst({
+      where: {
+        id,
+        officeId
+      },
+      include: {
+        client: true,
+        company: true,
+        documentRequest: true,
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    if (!task) {
+      return reply.code(404).send({ error: 'Task not found' });
     }
 
-    return prisma.$queryRawUnsafe(
-      `SELECT * FROM "Task" WHERE ${filters.join(' AND ')} ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC`,
-      ...values
-    );
+    return task;
   });
 
   app.post('/api/tasks', { preHandler: authMiddleware }, async (request, reply) => {
@@ -53,31 +105,36 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'Task title is required' });
     }
 
-    const id = randomUUID();
-    const status = safeStatus(data.status);
-    const priority = safePriority(data.priority);
-    const dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    const task = await prisma.task.create({
+      data: {
+        officeId,
+        title: data.title,
+        description: data.description || null,
+        clientId: data.clientId || null,
+        companyId: data.companyId || null,
+        documentRequestId: data.documentRequestId || null,
+        assignedToId: data.assignedToId || null,
+        status: normalizeStatus(data.status) as any,
+        priority: normalizePriority(data.priority) as any,
+        source: data.source || 'manual',
+        dueDate: data.dueDate ? new Date(data.dueDate) : null
+      },
+      include: {
+        client: true,
+        company: true,
+        documentRequest: true,
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
 
-    const created = await prisma.$queryRawUnsafe(
-      `INSERT INTO "Task" (
-        id, "officeId", "clientId", "companyId", "documentRequestId", "assignedToId",
-        title, description, status, priority, source, "dueDate", "createdAt", "updatedAt"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()) RETURNING *`,
-      id,
-      officeId,
-      data.clientId || null,
-      data.companyId || null,
-      data.documentRequestId || null,
-      data.assignedToId || null,
-      data.title,
-      data.description || null,
-      status,
-      priority,
-      data.source || 'manual',
-      dueDate
-    );
-
-    return created;
+    return task;
   });
 
   app.put('/api/tasks/:id', { preHandler: authMiddleware }, async (request, reply) => {
@@ -85,52 +142,76 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as any;
     const data = request.body as any;
 
-    const existing = await prisma.$queryRawUnsafe('SELECT id FROM "Task" WHERE id = $1 AND "officeId" = $2 LIMIT 1', id, officeId) as any[];
-    if (!existing.length) return reply.code(404).send({ error: 'Task not found' });
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id,
+        officeId
+      }
+    });
 
-    const status = data.status ? safeStatus(data.status) : undefined;
-    const priority = data.priority ? safePriority(data.priority) : undefined;
-    const dueDate = data.dueDate ? new Date(data.dueDate) : null;
-    const completedAt = status === 'DONE' ? new Date() : null;
+    if (!existingTask) {
+      return reply.code(404).send({ error: 'Task not found' });
+    }
 
-    return prisma.$queryRawUnsafe(
-      `UPDATE "Task" SET
-        title = COALESCE($3, title),
-        description = COALESCE($4, description),
-        status = COALESCE($5, status),
-        priority = COALESCE($6, priority),
-        source = COALESCE($7, source),
-        "clientId" = COALESCE($8, "clientId"),
-        "companyId" = COALESCE($9, "companyId"),
-        "documentRequestId" = COALESCE($10, "documentRequestId"),
-        "assignedToId" = COALESCE($11, "assignedToId"),
-        "dueDate" = COALESCE($12, "dueDate"),
-        "completedAt" = COALESCE($13, "completedAt"),
-        "updatedAt" = NOW()
-      WHERE id = $1 AND "officeId" = $2
-      RETURNING *`,
-      id,
-      officeId,
-      data.title || null,
-      data.description || null,
-      status || null,
-      priority || null,
-      data.source || null,
-      data.clientId || null,
-      data.companyId || null,
-      data.documentRequestId || null,
-      data.assignedToId || null,
-      dueDate,
-      completedAt
-    );
+    const nextStatus = data.status ? normalizeStatus(data.status) : existingTask.status;
+    const nextPriority = data.priority ? normalizePriority(data.priority) : existingTask.priority;
+
+    const completedAt =
+      nextStatus === 'DONE' && existingTask.status !== 'DONE'
+        ? new Date()
+        : existingTask.completedAt;
+
+    const task = await prisma.task.update({
+      where: { id },
+      data: {
+        title: data.title ?? existingTask.title,
+        description: data.description ?? existingTask.description,
+        clientId: data.clientId ?? existingTask.clientId,
+        companyId: data.companyId ?? existingTask.companyId,
+        documentRequestId: data.documentRequestId ?? existingTask.documentRequestId,
+        assignedToId: data.assignedToId ?? existingTask.assignedToId,
+        status: nextStatus as any,
+        priority: nextPriority as any,
+        source: data.source ?? existingTask.source,
+        dueDate: data.dueDate ? new Date(data.dueDate) : existingTask.dueDate,
+        completedAt
+      },
+      include: {
+        client: true,
+        company: true,
+        documentRequest: true,
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    return task;
   });
 
   app.delete('/api/tasks/:id', { preHandler: authMiddleware }, async (request, reply) => {
     const { officeId } = (request as any).user;
     const { id } = request.params as any;
 
-    const deleted = await prisma.$executeRawUnsafe('DELETE FROM "Task" WHERE id = $1 AND "officeId" = $2', id, officeId);
-    if (!deleted) return reply.code(404).send({ error: 'Task not found' });
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id,
+        officeId
+      }
+    });
+
+    if (!existingTask) {
+      return reply.code(404).send({ error: 'Task not found' });
+    }
+
+    await prisma.task.delete({
+      where: { id }
+    });
 
     return { deleted: true };
   });
