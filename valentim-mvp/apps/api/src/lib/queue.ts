@@ -1,52 +1,26 @@
-type QueueJobOptions = {
-  jobId?: string;
-};
+import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
 
-type QueueJob<TPayload> = {
-  name: string;
-  payload: TPayload;
-  options?: QueueJobOptions;
-  createdAt: Date;
-};
+// Conexão compartilhada com Redis.
+// BullMQ exige maxRetriesPerRequest=null.
+export const redisConnection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+  maxRetriesPerRequest: null
+});
 
-class InMemoryQueue<TPayload extends Record<string, unknown>> {
-  private readonly jobs = new Map<string, QueueJob<TPayload>>();
-
-  async add(name: string, payload: TPayload, options?: QueueJobOptions) {
-    const id = options?.jobId ?? `${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    if (this.jobs.has(id)) {
-      return { id, duplicated: true };
-    }
-
-    this.jobs.set(id, {
-      name,
-      payload,
-      options,
-      createdAt: new Date()
-    });
-
-    return { id, duplicated: false };
+// Responsável por baixar a mídia da Meta Graph API e salvar no R2.
+export const mediaDownloadQueue = new Queue<MediaDownloadJobData>('media-download', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 3000 },
+    removeOnComplete: { count: 200 },
+    removeOnFail: { count: 500 }
   }
+});
 
-  list() {
-    return Array.from(this.jobs.entries()).map(([id, job]) => ({ id, ...job }));
-  }
-
-  async drain() {
-    const jobs = this.list();
-    this.jobs.clear();
-    return jobs;
-  }
-}
-
-type MediaDownloadPayload = {
+export interface MediaDownloadJobData {
   documentFileId: string;
   metaMediaId: string;
   filename: string;
   mimeType: string;
-};
-
-// MVP local: mantém a interface de fila estável sem adicionar Redis/BullMQ agora.
-// Próximo passo: trocar esta implementação por BullMQ/Redis ou outro worker persistente.
-export const mediaDownloadQueue = new InMemoryQueue<MediaDownloadPayload>();
+}
