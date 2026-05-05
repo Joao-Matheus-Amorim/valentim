@@ -17,7 +17,13 @@ const clientsRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as any;
     const client = await prisma.client.findFirst({
       where: { id, officeId },
-      include: { companies: true, documentRequests: true }
+      include: {
+        companies: {
+          include: {
+            DocumentRequest: true
+          }
+        }
+      }
     });
     if (!client) return reply.code(404).send({ error: 'Client not found' });
     return client;
