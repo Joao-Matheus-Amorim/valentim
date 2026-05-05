@@ -1,10 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell';
+import { Card } from './components/Card';
 import { navigationItems } from './data/navigation';
+import { getStoredToken } from './services/api';
+import { getMe, logout } from './services/auth';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { DashboardPage } from './pages/DashboardPage';
+import { LoginPage } from './pages/LoginPage';
 import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
 import { TasksPage } from './pages/TasksPage';
+import type { AuthUser } from './types/auth';
 import type { AppSectionId } from './types/ui';
 
 const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks'>, JSX.Element> = {
@@ -18,7 +23,18 @@ const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | '
   proposals: <ModulePlaceholderPage title="Propostas" badge="Comercial" color="teal" description="Gestao de propostas comerciais enviadas para clientes e prospects do escritorio." nextSteps={['Consumir GET /api/proposals.', 'Criar formulario de proposta.', 'Controlar status enviada, aceita e recusada.']} />,
 };
 
-export default function App() {
+function LoadingSession() {
+  return (
+    <div className="login-shell">
+      <Card color="slate" className="login-card">
+        <h1>Carregando sessão...</h1>
+        <p className="lead">Validando token e preparando o painel do escritório.</p>
+      </Card>
+    </div>
+  );
+}
+
+function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [active, setActive] = useState<AppSectionId>('dashboard');
 
   const activePage = useMemo(() => {
@@ -29,8 +45,53 @@ export default function App() {
   }, [active]);
 
   return (
-    <AppShell active={active} items={navigationItems} onNavigate={setActive}>
+    <AppShell active={active} items={navigationItems} user={user} onNavigate={setActive} onLogout={onLogout}>
       {activePage}
     </AppShell>
   );
+}
+
+export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  const refreshSession = useCallback(async () => {
+    const token = getStoredToken();
+    if (!token) {
+      setUser(null);
+      setCheckingSession(false);
+      return;
+    }
+
+    setCheckingSession(true);
+    try {
+      const currentUser = await getMe();
+      setUser(currentUser);
+      if (!currentUser) {
+        logout();
+      }
+    } catch (err) {
+      logout();
+      setUser(null);
+    } finally {
+      setCheckingSession(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
+  function handleLogout() {
+    logout();
+    setUser(null);
+  }
+
+  if (checkingSession) return <LoadingSession />;
+
+  if (!user) {
+    return <LoginPage onAuthenticated={refreshSession} />;
+  }
+
+  return <AuthenticatedApp user={user} onLogout={handleLogout} />;
 }
