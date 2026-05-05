@@ -5,8 +5,10 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "worker": "ts-node-dev --respawn --transpile-only src/workers/index.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:worker": "node dist/workers/index.js",
     "prisma": "prisma",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -14,10 +16,13 @@
     "prisma:seed:tasks": "ts-node --transpile-only prisma/seed-tasks.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.810.0",
     "@fastify/cors": "^8.5.0",
     "@prisma/client": "^4.15.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.52.2",
     "fastify": "^4.21.0",
+    "ioredis": "^5.6.1",
     "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
