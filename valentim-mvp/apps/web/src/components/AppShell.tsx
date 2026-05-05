@@ -1,15 +1,19 @@
 import type { ReactNode } from 'react';
+import type { AuthUser } from '../types/auth';
 import type { AppSectionId, NavItem } from '../types/ui';
 import { Badge } from './Badge';
+import './AppShell.css';
 
 interface AppShellProps {
   active: AppSectionId;
   items: NavItem[];
+  user: AuthUser;
   onNavigate: (section: AppSectionId) => void;
+  onLogout: () => void;
   children: ReactNode;
 }
 
-export function AppShell({ active, items, onNavigate, children }: AppShellProps) {
+export function AppShell({ active, items, user, onNavigate, onLogout, children }: AppShellProps) {
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -17,10 +21,17 @@ export function AppShell({ active, items, onNavigate, children }: AppShellProps)
           <p>Valentim · WhatsApp-first</p>
           <h1>Sistema de Contabilidade Automatizada</h1>
         </div>
-        <div className="top-badges">
-          <Badge color="green">WhatsApp</Badge>
-          <Badge color="amber">IA Vision</Badge>
-          <Badge color="violet">Auto-archive</Badge>
+        <div className="topbar-actions">
+          <div className="user-pill">
+            <strong>{user.name}</strong>
+            <span>{user.role}</span>
+          </div>
+          <div className="top-badges">
+            <Badge color="green">WhatsApp</Badge>
+            <Badge color="amber">IA Vision</Badge>
+            <Badge color="violet">Auto-archive</Badge>
+          </div>
+          <button className="logout-button" type="button" onClick={onLogout}>Sair</button>
         </div>
       </header>
       <div className="layout">
@@ -35,8 +46,8 @@ export function AppShell({ active, items, onNavigate, children }: AppShellProps)
           <div className="sidebar-info">
             <small>Canal cliente</small>
             <strong>📱 WhatsApp only</strong>
-            <small>Stack IA</small>
-            <strong>Mock → Claude/OpenAI</strong>
+            <small>Usuário</small>
+            <strong>{user.email}</strong>
           </div>
         </aside>
         <main className="content">{children}</main>
