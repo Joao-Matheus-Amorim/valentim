@@ -1,21 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Card } from '../components/Card';
 import { Badge } from '../components/Badge';
-import { listTasks } from '../services/tasks';
+import { useTasks } from '../context/TasksContext';
 import type { Task } from '../types/task';
 import './DashboardPage.css';
 
 function isFinished(task: Task) {
   return task.status === 'DONE' || task.status === 'CANCELED';
-}
-
-function isOverdue(task: Task) {
-  if (!task.dueDate || isFinished(task)) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dueDate = new Date(task.dueDate);
-  dueDate.setHours(0, 0, 0, 0);
-  return dueDate < today;
 }
 
 function formatDate(value?: string | null) {
@@ -26,27 +17,7 @@ function formatDate(value?: string | null) {
 }
 
 export function DashboardPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState(true);
-  const [tasksError, setTasksError] = useState(false);
-
-  useEffect(() => {
-    listTasks()
-      .then((data) => {
-        setTasks(data);
-        setTasksError(false);
-      })
-      .catch(() => setTasksError(true))
-      .finally(() => setLoadingTasks(false));
-  }, []);
-
-  const metrics = useMemo(() => {
-    const open = tasks.filter((task) => !isFinished(task)).length;
-    const critical = tasks.filter((task) => task.priority === 'URGENT' || task.status === 'OVERDUE' || isOverdue(task)).length;
-    const review = tasks.filter((task) => task.status === 'WAITING_REVIEW' || task.source === 'ai').length;
-    const done = tasks.filter((task) => task.status === 'DONE').length;
-    return { open, critical, review, done };
-  }, [tasks]);
+  const { tasks, metrics, loading, error, refreshTasks } = useTasks();
 
   const priorityTasks = useMemo(() => {
     return tasks
@@ -68,7 +39,10 @@ export function DashboardPage() {
           <h2>Dashboard Operacional</h2>
           <p className="lead">Visão executiva do que exige ação agora no escritório.</p>
         </div>
-        <Badge color="green">MVP operacional</Badge>
+        <div className="dashboard-actions">
+          <Badge color="green">MVP operacional</Badge>
+          <button className="dashboard-refresh" type="button" onClick={refreshTasks}>Atualizar</button>
+        </div>
       </div>
 
       <div className="grid four">
@@ -80,10 +54,10 @@ export function DashboardPage() {
 
       <div className="grid two">
         <Card title="Fila crítica do dia" color="slate">
-          {loadingTasks ? <p className="lead">Carregando tarefas...</p> : null}
-          {tasksError ? <p className="lead">Não foi possível carregar tarefas. Verifique API/token.</p> : null}
-          {!loadingTasks && !tasksError && priorityTasks.length === 0 ? <p className="lead">Nenhuma tarefa crítica ou aberta encontrada.</p> : null}
-          {!loadingTasks && !tasksError && priorityTasks.length > 0 ? (
+          {loading ? <p className="lead">Carregando tarefas...</p> : null}
+          {error ? <p className="lead">{error}</p> : null}
+          {!loading && !error && priorityTasks.length === 0 ? <p className="lead">Nenhuma tarefa crítica ou aberta encontrada.</p> : null}
+          {!loading && !error && priorityTasks.length > 0 ? (
             <div className="dashboard-priority-list">
               {priorityTasks.map((task) => (
                 <div className="dashboard-priority-item" key={task.id}>
