@@ -12,10 +12,12 @@ import financeRoutes from './routes/finance.routes';
 import proposalsRoutes from './routes/proposals.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
+import tasksRoutes from './routes/tasks.routes';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
   app.register(cors, { origin: true });
+
   app.get('/health', async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -24,6 +26,7 @@ export function buildApp() {
       return { status: 'error', database: 'disconnected' };
     }
   });
+
   app.register(authRoutes);
   app.register(dashboardRoutes);
   app.register(clientsRoutes);
@@ -34,5 +37,7 @@ export function buildApp() {
   app.register(financeRoutes);
   app.register(proposalsRoutes);
   app.register(whatsappRoutes);
+  app.register(tasksRoutes);
+
   return app;
 }
