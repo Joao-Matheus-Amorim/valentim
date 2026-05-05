@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { Card } from './components/Card';
+import { TasksProvider } from './context/TasksContext';
 import { navigationItems } from './data/navigation';
 import { getStoredToken } from './services/api';
 import { getMe, logout } from './services/auth';
@@ -45,9 +46,11 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
   }, [active]);
 
   return (
-    <AppShell active={active} items={navigationItems} user={user} onNavigate={setActive} onLogout={onLogout}>
-      {activePage}
-    </AppShell>
+    <TasksProvider>
+      <AppShell active={active} items={navigationItems} user={user} onNavigate={setActive} onLogout={onLogout}>
+        {activePage}
+      </AppShell>
+    </TasksProvider>
   );
 }
 
