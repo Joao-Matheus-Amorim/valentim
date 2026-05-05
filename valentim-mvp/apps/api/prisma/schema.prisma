@@ -44,26 +44,48 @@ enum WhatsAppDirection {
   OUTGOING
 }
 
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  WAITING_CLIENT
+  WAITING_DOCUMENT
+  WAITING_REVIEW
+  DONE
+  OVERDUE
+  CANCELED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model Office {
   id               String            @id @default(uuid())
   name             String
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+
   users            User[]
   clients          Client[]
   whatsAppMessages WhatsAppMessage[]
+  tasks            Task[]
 }
 
 model User {
-  id        String   @id @default(uuid())
-  officeId  String
-  office    Office   @relation(fields: [officeId], references: [id])
-  role      UserRole
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  officeId      String
+  office        Office   @relation(fields: [officeId], references: [id])
+  role          UserRole
+  name          String
+  email         String   @unique
+  password      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignedTasks Task[]   @relation("TaskAssignee")
 }
 
 model Client {
@@ -74,25 +96,29 @@ model Client {
   phone              String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+
   companies          Company[]
   whatsAppMessages   WhatsAppMessage[]
   conversationStates ConversationState[]
   proposals          Proposal[]
   unmatchedDocuments UnmatchedDocument[]
+  tasks              Task[]
 }
 
 model Company {
-  id              String            @id @default(uuid())
-  clientId        String
-  client          Client            @relation(fields: [clientId], references: [id])
-  name            String
-  cnpj            String?
-  regime          String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  deadlines       Deadline[]
-  charges         Charge[]
-  DocumentRequest DocumentRequest[]
+  id               String            @id @default(uuid())
+  clientId         String
+  client           Client            @relation(fields: [clientId], references: [id])
+  name             String
+  cnpj             String?
+  regime           String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  deadlines        Deadline[]
+  charges          Charge[]
+  documentRequests DocumentRequest[]
+  tasks            Task[]
 }
 
 model DocumentRequest {
@@ -105,9 +131,11 @@ model DocumentRequest {
   status             DocumentStatus      @default(PENDING)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+
   files              DocumentFile[]
   aiAnalyses         AIAnalysis[]
   unmatchedDocuments UnmatchedDocument[]
+  tasks              Task[]
 }
 
 model DocumentFile {
@@ -118,6 +146,7 @@ model DocumentFile {
   mimeType          String
   storageKey        String
   createdAt         DateTime         @default(now())
+
   aiAnalyses        AIAnalysis[]
 }
 
@@ -213,4 +242,41 @@ model Proposal {
   value       Decimal
   status      String
   createdAt   DateTime @default(now())
+}
+
+model Task {
+  id                String           @id @default(uuid())
+
+  officeId          String
+  office            Office           @relation(fields: [officeId], references: [id])
+
+  clientId          String?
+  client            Client?          @relation(fields: [clientId], references: [id])
+
+  companyId         String?
+  company           Company?         @relation(fields: [companyId], references: [id])
+
+  documentRequestId String?
+  documentRequest   DocumentRequest? @relation(fields: [documentRequestId], references: [id])
+
+  assignedToId      String?
+  assignedTo        User?            @relation("TaskAssignee", fields: [assignedToId], references: [id])
+
+  title             String
+  description       String?
+  status            TaskStatus       @default(PENDING)
+  priority          TaskPriority     @default(MEDIUM)
+  source            String           @default("manual")
+  dueDate           DateTime?
+  completedAt       DateTime?
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([officeId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([clientId])
+  @@index([companyId])
 }
