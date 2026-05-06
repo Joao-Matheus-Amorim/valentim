@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listClients } from '../services/clients';
-import { createCompany, listCompanies } from '../services/companies';
+import { createCompany, listCompanies, updateCompany } from '../services/companies';
 import type { Client } from '../types/client';
 import type { Company, CreateCompanyInput } from '../types/company';
 import './CompaniesPage.css';
@@ -34,6 +34,7 @@ export function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [companyForm, setCompanyForm] = useState<CreateCompanyInput>(initialCompanyForm);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +70,18 @@ export function CompaniesPage() {
       clients: new Set(companies.map((company) => company.clientId)).size
     };
   }, [companies]);
+
+  function startEditingCompany(company: Company) {
+    setEditingCompany(company);
+    setCompanyForm({
+      clientId: company.clientId,
+      name: company.name,
+      cnpj: company.cnpj ?? '',
+      regime: company.regime ?? ''
+    });
+    setError(null);
+    setSuccess(null);
+  }
 
   async function handleCompanyFormSubmit(event: FormEvent) {
     event.preventDefault();
