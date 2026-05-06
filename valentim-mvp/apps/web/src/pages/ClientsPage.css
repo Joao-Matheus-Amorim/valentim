@@ -71,7 +71,8 @@
   filter: brightness(1.08);
 }
 
-.client-primary-button:disabled {
+.client-primary-button:disabled,
+.client-secondary-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
@@ -122,7 +123,9 @@
 }
 
 .client-card-main span,
-.client-companies span {
+.client-companies span,
+.client-operational-item span,
+.client-next-step span {
   color: #94a3b8;
   font-size: 0.7rem;
 }
@@ -132,6 +135,40 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
+}
+
+.client-operational-summary {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.78rem;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.22), rgba(15, 23, 42, 0.42));
+}
+
+.client-operational-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.client-operational-item,
+.client-next-step {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.client-operational-item strong,
+.client-next-step strong {
+  color: #bbf7d0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.client-next-step {
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .client-companies {
@@ -167,5 +204,9 @@
   .clients-actions,
   .client-card-meta {
     justify-content: flex-start;
+  }
+
+  .client-operational-grid {
+    grid-template-columns: 1fr;
   }
 }
