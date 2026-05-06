@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "cd valentim-mvp && pnpm install",
+  "buildCommand": "cd valentim-mvp && pnpm --filter web build",
+  "outputDirectory": "valentim-mvp/apps/web/dist"
+}
