@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
-import { createClient, listClients, updateClient } from '../services/clients';
+import { createClient, deleteClient, listClients, updateClient } from '../services/clients';
 import type { Client, CreateClientInput } from '../types/client';
 import './ClientsPage.css';
 
@@ -26,6 +26,7 @@ export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState<CreateClientInput>(initialForm);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
