@@ -21,6 +21,7 @@
     "build": "pnpm --filter api build && pnpm --filter web build",
     "build:api": "pnpm --filter api build",
     "build:web": "pnpm --filter web build",
+    "check:web": "pnpm --filter web build",
     "prisma:generate": "pnpm --filter api prisma:generate",
     "prisma:migrate": "pnpm --filter api prisma:migrate",
     "prisma:seed": "pnpm --filter api prisma:seed"
