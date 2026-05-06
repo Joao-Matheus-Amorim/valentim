@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listCompanies } from '../services/companies';
-import { listDocuments } from '../services/documents';
+import { createDocument, listDocuments } from '../services/documents';
 import type { Company } from '../types/company';
 import type { CreateDocumentInput, DocumentRequest, DocumentStatus } from '../types/document';
 import './DocumentsPage.css';
@@ -43,7 +43,9 @@ export function DocumentsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function loadDocuments() {
     setLoading(true);
@@ -77,9 +79,39 @@ export function DocumentsPage() {
     };
   }, [documents]);
 
-  function handleDocumentFormSubmit(event: FormEvent) {
+  async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
-    setError('A criação de solicitação será ativada na próxima etapa da implementação.');
+
+    const companyId = documentForm.companyId;
+    const documentType = documentForm.documentType.trim();
+    const competence = documentForm.competence?.trim() || null;
+    const dueDate = documentForm.dueDate || null;
+
+    if (!companyId) {
+      setError('Selecione a empresa da solicitação.');
+      return;
+    }
+
+    if (!documentType) {
+      setError('Selecione o tipo de documento.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await createDocument({ companyId, documentType, competence, dueDate });
+      setDocumentForm(initialDocumentForm);
+      setSuccess('Solicitação criada com sucesso.');
+      window.setTimeout(() => setSuccess(null), 3000);
+      await loadDocuments();
+    } catch (err) {
+      setError('Não foi possível criar a solicitação. Verifique os dados e tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -96,6 +128,7 @@ export function DocumentsPage() {
       </div>
 
       {error ? <div className="documents-alert error">{error}</div> : null}
+      {success ? <div className="documents-alert success">{success}</div> : null}
 
       <div className="grid four">
         <Card color="amber" title="Total"><div className="metric">{metrics.total}</div><p>Solicitações cadastradas.</p></Card>
@@ -112,7 +145,7 @@ export function DocumentsPage() {
               <select
                 value={documentForm.companyId}
                 onChange={(event) => setDocumentForm({ ...documentForm, companyId: event.target.value })}
-                disabled={loading || companies.length === 0}
+                disabled={loading || saving || companies.length === 0}
               >
                 <option value="">Selecione uma empresa</option>
                 {companies.map((company) => (
@@ -125,7 +158,7 @@ export function DocumentsPage() {
               <select
                 value={documentForm.documentType}
                 onChange={(event) => setDocumentForm({ ...documentForm, documentType: event.target.value })}
-                disabled={loading}
+                disabled={loading || saving}
               >
                 <option value="">Selecione o tipo</option>
                 {documentTypeOptions.map((type) => (
@@ -139,6 +172,7 @@ export function DocumentsPage() {
                 value={documentForm.competence || ''}
                 onChange={(event) => setDocumentForm({ ...documentForm, competence: event.target.value })}
                 placeholder="Ex.: 05/2026"
+                disabled={saving}
               />
             </label>
             <label>
@@ -147,10 +181,11 @@ export function DocumentsPage() {
                 type="date"
                 value={documentForm.dueDate || ''}
                 onChange={(event) => setDocumentForm({ ...documentForm, dueDate: event.target.value })}
+                disabled={saving}
               />
             </label>
-            <button className="document-primary-button" type="submit" disabled={loading || companies.length === 0}>
-              Criar solicitação
+            <button className="document-primary-button" type="submit" disabled={loading || saving || companies.length === 0}>
+              {saving ? 'Criando...' : 'Criar solicitação'}
             </button>
           </form>
         </Card>
