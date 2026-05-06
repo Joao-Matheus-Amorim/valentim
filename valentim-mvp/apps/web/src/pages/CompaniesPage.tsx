@@ -230,6 +230,9 @@ export function CompaniesPage() {
                     <Badge color="amber">{countDocuments(company)} documentos</Badge>
                     <Badge color="rose">{countDeadlines(company)} prazos</Badge>
                     <Badge color="emerald">{countCharges(company)} cobranças</Badge>
+                    <button className="company-secondary-button" type="button" onClick={() => startEditingCompany(company)}>
+                      Editar
+                    </button>
                   </div>
                 </div>
               </article>
