@@ -14,10 +14,16 @@ services:
   redis:
     image: redis:7
     container_name: valentim-redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   evolution:
     image: atendai/evolution-api:latest
@@ -30,11 +36,17 @@ services:
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: "postgresql"
       DATABASE_CONNECTION_URI: "postgresql://valentim:valentim@postgres:5432/valentim"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: "redis://redis:6379/6"
+      CACHE_REDIS_PREFIX_KEY: "valentim:evolution"
+      CACHE_REDIS_SAVE_INSTANCES: "false"
       REDIS_ENABLED: "true"
-      REDIS_URI: "redis://redis:6379"
+      REDIS_URI: "redis://redis:6379/6"
     depends_on:
-      - postgres
-      - redis
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_started
 
 volumes:
   postgres_data:
