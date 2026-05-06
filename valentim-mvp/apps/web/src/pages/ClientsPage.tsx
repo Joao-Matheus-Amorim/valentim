@@ -175,6 +175,9 @@ export function ClientsPage() {
                     <Badge color="sky">{client.companies?.length || 0} empresas</Badge>
                     <Badge color="amber">{countDocuments(client)} documentos</Badge>
                     <Badge color="violet">{countTasks(client)} tarefas</Badge>
+                    <button className="client-secondary-button" type="button" onClick={() => startEditingClient(client)}>
+                      Editar
+                    </button>
                   </div>
                 </div>
 
