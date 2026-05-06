@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listClients } from '../services/clients';
-import { listCompanies } from '../services/companies';
+import { createCompany, listCompanies } from '../services/companies';
 import type { Client } from '../types/client';
 import type { Company, CreateCompanyInput } from '../types/company';
 import './CompaniesPage.css';
@@ -35,7 +35,9 @@ export function CompaniesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [companyForm, setCompanyForm] = useState<CreateCompanyInput>(initialCompanyForm);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   async function loadCompanies() {
     setLoading(true);
@@ -68,9 +70,39 @@ export function CompaniesPage() {
     };
   }, [companies]);
 
-  function handleCompanyFormSubmit(event: FormEvent) {
+  async function handleCompanyFormSubmit(event: FormEvent) {
     event.preventDefault();
-    setError('A criação de empresa será ativada na próxima etapa da implementação.');
+
+    const clientId = companyForm.clientId;
+    const name = companyForm.name.trim();
+    const cnpj = companyForm.cnpj?.trim() || null;
+    const regime = companyForm.regime?.trim() || null;
+
+    if (!clientId) {
+      setError('Selecione o cliente responsável pela empresa.');
+      return;
+    }
+
+    if (!name) {
+      setError('Informe o nome da empresa.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await createCompany({ clientId, name, cnpj, regime });
+      setCompanyForm(initialCompanyForm);
+      setSuccess('Empresa criada com sucesso.');
+      window.setTimeout(() => setSuccess(null), 3000);
+      await loadCompanies();
+    } catch (err) {
+      setError('Não foi possível criar a empresa. Verifique os dados e tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -87,6 +119,7 @@ export function CompaniesPage() {
       </div>
 
       {error ? <div className="companies-alert error">{error}</div> : null}
+      {success ? <div className="companies-alert success">{success}</div> : null}
 
       <div className="grid four">
         <Card color="sky" title="Empresas"><div className="metric">{metrics.total}</div><p>Total cadastrado no escritório.</p></Card>
@@ -103,7 +136,7 @@ export function CompaniesPage() {
               <select
                 value={companyForm.clientId}
                 onChange={(event) => setCompanyForm({ ...companyForm, clientId: event.target.value })}
-                disabled={loading || clients.length === 0}
+                disabled={loading || saving || clients.length === 0}
               >
                 <option value="">Selecione um cliente</option>
                 {clients.map((client) => (
@@ -117,6 +150,7 @@ export function CompaniesPage() {
                 value={companyForm.name}
                 onChange={(event) => setCompanyForm({ ...companyForm, name: event.target.value })}
                 placeholder="Ex.: Padaria do João LTDA"
+                disabled={saving}
               />
             </label>
             <label>
@@ -125,6 +159,7 @@ export function CompaniesPage() {
                 value={companyForm.cnpj || ''}
                 onChange={(event) => setCompanyForm({ ...companyForm, cnpj: event.target.value })}
                 placeholder="Ex.: 00.000.000/0001-00"
+                disabled={saving}
               />
             </label>
             <label>
@@ -133,10 +168,11 @@ export function CompaniesPage() {
                 value={companyForm.regime || ''}
                 onChange={(event) => setCompanyForm({ ...companyForm, regime: event.target.value })}
                 placeholder="Ex.: Simples Nacional"
+                disabled={saving}
               />
             </label>
-            <button className="company-primary-button" type="submit" disabled={loading || clients.length === 0}>
-              Criar empresa
+            <button className="company-primary-button" type="submit" disabled={loading || saving || clients.length === 0}>
+              {saving ? 'Criando...' : 'Criar empresa'}
             </button>
           </form>
         </Card>
