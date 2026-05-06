@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listCompanies } from '../services/companies';
@@ -15,6 +15,8 @@ const statusLabels: Record<DocumentStatus, string> = {
   REJECTED: 'Rejeitado',
   OVERDUE: 'Atrasado'
 };
+
+const documentTypeOptions = ['DAS', 'DARF', 'NF', 'EXTRATO', 'FOLHA', 'OUTRO'];
 
 const initialDocumentForm: CreateDocumentInput = {
   companyId: '',
@@ -75,6 +77,11 @@ export function DocumentsPage() {
     };
   }, [documents]);
 
+  function handleDocumentFormSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError('A criação de solicitação será ativada na próxima etapa da implementação.');
+  }
+
   return (
     <div className="stack documents-page">
       <div className="page-title documents-title">
@@ -95,6 +102,66 @@ export function DocumentsPage() {
         <Card color="sky" title="Pendentes"><div className="metric">{metrics.pending}</div><p>Aguardando envio do cliente.</p></Card>
         <Card color="green" title="Aprovados"><div className="metric">{metrics.approved}</div><p>Documentos conferidos.</p></Card>
         <Card color="rose" title="Atrasados"><div className="metric">{metrics.overdue}</div><p>Itens fora do prazo.</p></Card>
+      </div>
+
+      <div className="grid two documents-workspace">
+        <Card title="Criar solicitação" color="amber">
+          <form className="document-form" onSubmit={handleDocumentFormSubmit}>
+            <label>
+              Empresa
+              <select
+                value={documentForm.companyId}
+                onChange={(event) => setDocumentForm({ ...documentForm, companyId: event.target.value })}
+                disabled={loading || companies.length === 0}
+              >
+                <option value="">Selecione uma empresa</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Tipo de documento
+              <select
+                value={documentForm.documentType}
+                onChange={(event) => setDocumentForm({ ...documentForm, documentType: event.target.value })}
+                disabled={loading}
+              >
+                <option value="">Selecione o tipo</option>
+                {documentTypeOptions.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Competência
+              <input
+                value={documentForm.competence || ''}
+                onChange={(event) => setDocumentForm({ ...documentForm, competence: event.target.value })}
+                placeholder="Ex.: 05/2026"
+              />
+            </label>
+            <label>
+              Vencimento
+              <input
+                type="date"
+                value={documentForm.dueDate || ''}
+                onChange={(event) => setDocumentForm({ ...documentForm, dueDate: event.target.value })}
+              />
+            </label>
+            <button className="document-primary-button" type="submit" disabled={loading || companies.length === 0}>
+              Criar solicitação
+            </button>
+          </form>
+        </Card>
+
+        <Card title="Como usar" color="slate">
+          <div className="document-help-box">
+            <strong>Documento sempre pertence a uma empresa.</strong>
+            <span>Crie solicitações mensais para acompanhar o que o cliente precisa enviar.</span>
+            <span>Quando o documento chegar, o status poderá ser acompanhado pela fila.</span>
+          </div>
+        </Card>
       </div>
 
       <Card title="Fila de documentos" color="slate">
