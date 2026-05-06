@@ -91,6 +91,12 @@ export function CompaniesPage() {
     setSuccess(null);
   }
 
+  function startDeletingCompany(company: Company) {
+    setDeletingCompanyId(company.id);
+    setError(null);
+    setSuccess(null);
+  }
+
   async function handleCompanyFormSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -274,6 +280,9 @@ export function CompaniesPage() {
                     <Badge color="emerald">{countCharges(company)} cobranças</Badge>
                     <button className="company-secondary-button" type="button" onClick={() => startEditingCompany(company)} disabled={deletingCompanyId === company.id}>
                       Editar
+                    </button>
+                    <button className="company-secondary-button" type="button" onClick={() => startDeletingCompany(company)} disabled={deletingCompanyId === company.id}>
+                      {deletingCompanyId === company.id ? 'Preparando...' : 'Excluir'}
                     </button>
                   </div>
                 </div>
