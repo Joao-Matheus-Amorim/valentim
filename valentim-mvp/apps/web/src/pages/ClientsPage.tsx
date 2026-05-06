@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
-import { createClient, listClients } from '../services/clients';
+import { createClient, listClients, updateClient } from '../services/clients';
 import type { Client, CreateClientInput } from '../types/client';
 import './ClientsPage.css';
 
@@ -25,6 +25,7 @@ function countTasks(client: Client) {
 export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState<CreateClientInput>(initialForm);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,6 +66,16 @@ export function ClientsPage() {
       documents: clients.reduce((total, client) => total + countDocuments(client), 0)
     };
   }, [clients]);
+
+  function startEditingClient(client: Client) {
+    setEditingClient(client);
+    setForm({
+      name: client.name,
+      phone: client.phone ?? ''
+    });
+    setError(null);
+    setSuccess(null);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
