@@ -38,6 +38,10 @@ function getStatusBadgeColor(status: DocumentStatus) {
   return 'amber';
 }
 
+function canReviewDocument(status: DocumentStatus) {
+  return status !== 'APPROVED' && status !== 'REJECTED';
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -230,6 +234,16 @@ export function DocumentsPage() {
                   <div className="document-card-meta">
                     <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
                     <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
+                    {canReviewDocument(document.status) ? (
+                      <>
+                        <button className="document-secondary-button" type="button" disabled={reviewingDocumentId === document.id}>
+                          Aprovar
+                        </button>
+                        <button className="document-secondary-button" type="button" disabled={reviewingDocumentId === document.id}>
+                          Rejeitar
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </article>
