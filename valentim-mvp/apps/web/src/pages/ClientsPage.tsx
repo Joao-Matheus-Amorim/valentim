@@ -85,6 +85,12 @@ export function ClientsPage() {
     setSuccess(null);
   }
 
+  function startDeletingClient(client: Client) {
+    setDeletingClientId(client.id);
+    setError(null);
+    setSuccess(null);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const name = form.name.trim();
@@ -217,6 +223,9 @@ export function ClientsPage() {
                     <Badge color="violet">{countTasks(client)} tarefas</Badge>
                     <button className="client-secondary-button" type="button" onClick={() => startEditingClient(client)}>
                       Editar
+                    </button>
+                    <button className="client-secondary-button" type="button" onClick={() => startDeletingClient(client)} disabled={deletingClientId === client.id}>
+                      {deletingClientId === client.id ? 'Preparando...' : 'Excluir'}
                     </button>
                   </div>
                 </div>
