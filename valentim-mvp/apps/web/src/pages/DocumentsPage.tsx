@@ -4,7 +4,7 @@ import { Card } from '../components/Card';
 import { listCompanies } from '../services/companies';
 import { listDocuments } from '../services/documents';
 import type { Company } from '../types/company';
-import type { DocumentRequest, DocumentStatus } from '../types/document';
+import type { CreateDocumentInput, DocumentRequest, DocumentStatus } from '../types/document';
 import './DocumentsPage.css';
 
 const statusLabels: Record<DocumentStatus, string> = {
@@ -14,6 +14,13 @@ const statusLabels: Record<DocumentStatus, string> = {
   APPROVED: 'Aprovado',
   REJECTED: 'Rejeitado',
   OVERDUE: 'Atrasado'
+};
+
+const initialDocumentForm: CreateDocumentInput = {
+  companyId: '',
+  documentType: '',
+  competence: '',
+  dueDate: ''
 };
 
 function formatDate(date?: string | null) {
@@ -32,6 +39,7 @@ function getStatusBadgeColor(status: DocumentStatus) {
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
