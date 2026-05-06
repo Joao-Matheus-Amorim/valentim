@@ -13,6 +13,22 @@ type RawBodyRequest = {
   rawBody?: Buffer;
 };
 
+type InternalMessageType = 'TEXT' | 'DOCUMENT' | 'IMAGE' | 'OTHER';
+
+type InboundWhatsAppMessage = {
+  provider: 'META' | 'EVOLUTION';
+  providerMessageId: string;
+  providerAccountId: string;
+  from: string;
+  type: InternalMessageType;
+  body: string | null;
+  mediaId: string | null;
+  mediaUrl: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  canDownloadWithMetaWorker: boolean;
+};
+
 function verifyHmac(rawBody: Buffer, signature: string, appSecret: string): boolean {
   const expected =
     'sha256=' +
@@ -44,7 +60,15 @@ async function clonePayloadWithRawBody(request: unknown, payload: NodeJS.Readabl
   return replay;
 }
 
-// Formato real da Meta Cloud API → campos internos do Valentim
+function normalizePhone(phone: string) {
+  const clean = phone.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+  return clean.startsWith('+') ? clean : `+${clean}`;
+}
+
+// ---------------------------------------------------------------------------
+// Meta Cloud API
+// ---------------------------------------------------------------------------
+
 interface MetaMessage {
   id: string;
   from: string;
@@ -74,9 +98,7 @@ interface MetaWebhookPayload {
   }>;
 }
 
-type InternalMessageType = 'TEXT' | 'DOCUMENT' | 'IMAGE' | 'OTHER';
-
-function mapMessageType(metaType: MetaMessage['type']): InternalMessageType {
+function mapMetaMessageType(metaType: MetaMessage['type']): InternalMessageType {
   const map: Record<string, InternalMessageType> = {
     text: 'TEXT',
     document: 'DOCUMENT',
@@ -90,14 +112,28 @@ function mapMessageType(metaType: MetaMessage['type']): InternalMessageType {
   return map[metaType] ?? 'OTHER';
 }
 
-function normalizePhone(phone: string) {
-  return phone.startsWith('+') ? phone : `+${phone}`;
+function metaToInbound(msg: MetaMessage, wabaId: string): InboundWhatsAppMessage {
+  const media = getMetaMediaInfo(msg);
+
+  return {
+    provider: 'META',
+    providerAccountId: wabaId,
+    providerMessageId: msg.id,
+    from: msg.from,
+    type: mapMetaMessageType(msg.type),
+    body: msg.text?.body ?? null,
+    mediaId: media.mediaId,
+    mediaUrl: media.mediaUrl,
+    fileName: media.fileName,
+    mimeType: media.mimeType,
+    canDownloadWithMetaWorker: Boolean(media.mediaId)
+  };
 }
 
-function getMediaInfo(msg: MetaMessage) {
+function getMetaMediaInfo(msg: MetaMessage) {
   if (msg.document) {
     return {
-      metaMediaId: msg.document.id,
+      mediaId: msg.document.id,
       mediaUrl: `meta://media/${msg.document.id}`,
       fileName: msg.document.filename,
       mimeType: msg.document.mime_type
@@ -106,7 +142,7 @@ function getMediaInfo(msg: MetaMessage) {
 
   if (msg.image) {
     return {
-      metaMediaId: msg.image.id,
+      mediaId: msg.image.id,
       mediaUrl: `meta://media/${msg.image.id}`,
       fileName: null,
       mimeType: msg.image.mime_type
@@ -115,7 +151,7 @@ function getMediaInfo(msg: MetaMessage) {
 
   if (msg.audio) {
     return {
-      metaMediaId: msg.audio.id,
+      mediaId: msg.audio.id,
       mediaUrl: `meta://media/${msg.audio.id}`,
       fileName: null,
       mimeType: msg.audio.mime_type
@@ -124,7 +160,7 @@ function getMediaInfo(msg: MetaMessage) {
 
   if (msg.video) {
     return {
-      metaMediaId: msg.video.id,
+      mediaId: msg.video.id,
       mediaUrl: `meta://media/${msg.video.id}`,
       fileName: null,
       mimeType: msg.video.mime_type
@@ -133,14 +169,122 @@ function getMediaInfo(msg: MetaMessage) {
 
   if (msg.sticker) {
     return {
-      metaMediaId: msg.sticker.id,
+      mediaId: msg.sticker.id,
       mediaUrl: `meta://media/${msg.sticker.id}`,
       fileName: null,
       mimeType: msg.sticker.mime_type
     };
   }
 
-  return { metaMediaId: null, mediaUrl: null, fileName: null, mimeType: null };
+  return { mediaId: null, mediaUrl: null, fileName: null, mimeType: null };
+}
+
+// ---------------------------------------------------------------------------
+// Evolution API
+// ---------------------------------------------------------------------------
+
+type EvolutionWebhookPayload = {
+  event?: string;
+  instance?: string;
+  data?: {
+    key?: {
+      id?: string;
+      remoteJid?: string;
+      fromMe?: boolean;
+    };
+    pushName?: string;
+    messageType?: string;
+    message?: {
+      conversation?: string;
+      extendedTextMessage?: { text?: string };
+      documentMessage?: {
+        url?: string;
+        mimetype?: string;
+        fileName?: string;
+        mediaKey?: string;
+        directPath?: string;
+      };
+      imageMessage?: {
+        url?: string;
+        mimetype?: string;
+        mediaKey?: string;
+        directPath?: string;
+      };
+      audioMessage?: {
+        url?: string;
+        mimetype?: string;
+        mediaKey?: string;
+        directPath?: string;
+      };
+      videoMessage?: {
+        url?: string;
+        mimetype?: string;
+        mediaKey?: string;
+        directPath?: string;
+      };
+    };
+  };
+};
+
+function isEvolutionPayload(payload: unknown): payload is EvolutionWebhookPayload {
+  const body = payload as EvolutionWebhookPayload;
+  return body?.event === 'messages.upsert' || body?.event === 'MESSAGES_UPSERT';
+}
+
+function evolutionToInbound(payload: EvolutionWebhookPayload): InboundWhatsAppMessage | null {
+  const data = payload.data;
+  const key = data?.key;
+  const message = data?.message;
+
+  if (!data || !key?.id || !key.remoteJid || !message) return null;
+  if (key.fromMe) return null;
+
+  const documentMessage = message.documentMessage;
+  const imageMessage = message.imageMessage;
+  const audioMessage = message.audioMessage;
+  const videoMessage = message.videoMessage;
+
+  const body = message.conversation ?? message.extendedTextMessage?.text ?? null;
+
+  let type: InternalMessageType = 'TEXT';
+  let mediaUrl: string | null = null;
+  let fileName: string | null = null;
+  let mimeType: string | null = null;
+
+  if (documentMessage) {
+    type = 'DOCUMENT';
+    mediaUrl = documentMessage.url ?? documentMessage.directPath ?? `evolution://message/${key.id}`;
+    fileName = documentMessage.fileName ?? `documento-${key.id}.pdf`;
+    mimeType = documentMessage.mimetype ?? 'application/pdf';
+  } else if (imageMessage) {
+    type = 'IMAGE';
+    mediaUrl = imageMessage.url ?? imageMessage.directPath ?? `evolution://message/${key.id}`;
+    mimeType = imageMessage.mimetype ?? 'image/jpeg';
+  } else if (audioMessage) {
+    type = 'OTHER';
+    mediaUrl = audioMessage.url ?? audioMessage.directPath ?? `evolution://message/${key.id}`;
+    mimeType = audioMessage.mimetype ?? 'audio/ogg';
+  } else if (videoMessage) {
+    type = 'OTHER';
+    mediaUrl = videoMessage.url ?? videoMessage.directPath ?? `evolution://message/${key.id}`;
+    mimeType = videoMessage.mimetype ?? 'video/mp4';
+  } else if (!body) {
+    type = 'OTHER';
+  }
+
+  return {
+    provider: 'EVOLUTION',
+    providerAccountId: payload.instance ?? process.env.EVOLUTION_INSTANCE ?? 'evolution',
+    providerMessageId: key.id,
+    from: key.remoteJid,
+    type,
+    body,
+    mediaId: key.id,
+    mediaUrl,
+    fileName,
+    mimeType,
+    canDownloadWithMetaWorker: false
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,8 +292,6 @@ function getMediaInfo(msg: MetaMessage) {
 // ---------------------------------------------------------------------------
 
 const whatsappRoutes: FastifyPluginAsync = async (app) => {
-  // Fastify precisa do corpo cru para validar X-Hub-Signature-256.
-  // Este hook fica escopado a este plugin e repõe o stream para o parser JSON normal.
   app.addHook('preParsing', async (request, _reply, payload) => {
     if (request.method !== 'POST' || request.url.split('?')[0] !== '/api/webhooks/whatsapp') {
       return payload;
@@ -158,7 +300,7 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
     return clonePayloadWithRawBody(request, payload);
   });
 
-  // 1. Verificação de webhook (Meta exige isso ao cadastrar a URL)
+  // Verificação Meta. Evolution não usa este GET.
   app.get('/api/webhooks/whatsapp', async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
     const mode = query['hub.mode'];
@@ -180,8 +322,21 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(403).send({ error: 'Forbidden' });
   });
 
-  // 2. Receber mensagens reais da Meta
   app.post('/api/webhooks/whatsapp', async (request, reply) => {
+    const payload = request.body as MetaWebhookPayload | EvolutionWebhookPayload;
+
+    if (isEvolutionPayload(payload)) {
+      const inbound = evolutionToInbound(payload);
+
+      if (inbound) {
+        await handleInboundMessage(app, inbound).catch((err) => {
+          app.log.error({ err, msgId: inbound.providerMessageId }, 'Erro ao processar mensagem Evolution');
+        });
+      }
+
+      return reply.code(200).send({ received: true, provider: 'EVOLUTION' });
+    }
+
     const appSecret = process.env.WHATSAPP_APP_SECRET;
     const signatureHeader = (request.headers['x-hub-signature-256'] as string | undefined) ?? '';
 
@@ -197,68 +352,58 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: 'Invalid signature' });
     }
 
-    const payload = request.body as MetaWebhookPayload;
-
-    if (payload.object !== 'whatsapp_business_account') {
-      return reply.code(200).send({ received: true });
+    if ((payload as MetaWebhookPayload).object !== 'whatsapp_business_account') {
+      return reply.code(200).send({ received: true, provider: 'META' });
     }
 
-    for (const entry of payload.entry ?? []) {
+    for (const entry of (payload as MetaWebhookPayload).entry ?? []) {
       for (const change of entry.changes ?? []) {
         if (change.field !== 'messages') continue;
 
         for (const msg of change.value.messages ?? []) {
-          await handleMessage(app, msg, entry.id).catch((err) => {
-            app.log.error({ err, msgId: msg.id }, 'Erro ao processar mensagem WhatsApp');
+          const inbound = metaToInbound(msg, entry.id);
+          await handleInboundMessage(app, inbound).catch((err) => {
+            app.log.error({ err, msgId: inbound.providerMessageId }, 'Erro ao processar mensagem Meta');
           });
         }
       }
     }
 
-    // A Meta espera 200 para não reenfileirar o evento.
-    return reply.code(200).send({ received: true });
+    return reply.code(200).send({ received: true, provider: 'META' });
   });
 };
 
 // ---------------------------------------------------------------------------
-// Lógica de processamento de cada mensagem
+// Lógica de processamento comum
 // ---------------------------------------------------------------------------
 
-async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMessage, wabaId: string) {
-  // Evita duplicar mensagens caso a Meta tente reenviar o mesmo evento.
+async function handleInboundMessage(app: Parameters<FastifyPluginAsync>[0], inbound: InboundWhatsAppMessage) {
   const alreadyProcessed = await prisma.whatsAppMessage.findFirst({
-    where: { providerMessageId: msg.id }
+    where: { providerMessageId: inbound.providerMessageId }
   });
 
   if (alreadyProcessed) return;
 
-  // Setup atual ainda não tem whatsappAccountId no Office.
-  // Quando o schema ganhar esse campo, este fallback deve virar busca por WABA ID.
   const office = await prisma.office.findFirst();
-
   if (!office) return;
 
-  const phone = normalizePhone(msg.from);
+  const phone = normalizePhone(inbound.from);
 
   const client = await prisma.client.findFirst({
     where: { phone, officeId: office.id }
   });
 
-  const messageType = mapMessageType(msg.type);
-  const body = msg.text?.body ?? null;
-  const { metaMediaId, mediaUrl, fileName, mimeType } = getMediaInfo(msg);
-
   await prisma.whatsAppMessage.create({
     data: {
       officeId: office.id,
       clientId: client?.id ?? null,
-      providerMessageId: msg.id,
+      providerMessageId: inbound.providerMessageId,
       phone,
       direction: 'INCOMING',
-      messageType,
-      body,
-      mediaUrl,
-      mediaKey: metaMediaId ? `pending://meta/${metaMediaId}` : null,
+      messageType: inbound.type,
+      body: inbound.body,
+      mediaUrl: inbound.mediaUrl,
+      mediaKey: inbound.mediaId ? `pending://${inbound.provider.toLowerCase()}/${inbound.mediaId}` : null,
       processed: false
     }
   });
@@ -272,7 +417,7 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
       await prisma.conversationState.update({
         where: { id: conversation.id },
         data: {
-          status: messageType === 'DOCUMENT' ? 'PROCESSING' : 'IDLE',
+          status: inbound.type === 'DOCUMENT' ? 'PROCESSING' : 'IDLE',
           lastMessageAt: new Date()
         }
       });
@@ -281,7 +426,7 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
         data: {
           clientId: client.id,
           phone,
-          status: messageType === 'DOCUMENT' ? 'PROCESSING' : 'IDLE',
+          status: inbound.type === 'DOCUMENT' ? 'PROCESSING' : 'IDLE',
           pendingRequests: [],
           lastMessageAt: new Date()
         }
@@ -289,10 +434,9 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
     }
   }
 
-  // Só documentos entram no fluxo atual de análise de IA mockada.
-  if (messageType !== 'DOCUMENT' || !metaMediaId || !fileName || !mimeType) return;
+  if (inbound.type !== 'DOCUMENT' || !inbound.mediaId || !inbound.fileName || !inbound.mimeType) return;
 
-  const ai = analyzeDocument(fileName, mimeType);
+  const ai = analyzeDocument(inbound.fileName, inbound.mimeType);
 
   const docRequest = client
     ? await prisma.documentRequest.findFirst({
@@ -306,12 +450,16 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
       })
     : null;
 
+  const storageKey = inbound.canDownloadWithMetaWorker
+    ? `pending://meta/${inbound.mediaId}`
+    : inbound.mediaUrl ?? `pending://evolution/${inbound.mediaId}`;
+
   const fileRecord = await prisma.documentFile.create({
     data: {
       documentRequestId: docRequest?.id ?? null,
-      filename: fileName,
-      mimeType,
-      storageKey: `pending://meta/${metaMediaId}`
+      filename: inbound.fileName,
+      mimeType: inbound.mimeType,
+      storageKey
     }
   });
 
@@ -342,8 +490,8 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
         clientId: client?.id ?? null,
         companyId: docRequest.companyId,
         documentRequestId: docRequest.id,
-        title: `Revisar documento recebido: ${fileName}`,
-        description: `Documento recebido pelo WhatsApp (${wabaId}) e classificado pelo mock de IA como ${ai.documentType}.`,
+        title: `Revisar documento recebido: ${inbound.fileName}`,
+        description: `Documento recebido pelo WhatsApp (${inbound.providerAccountId}) via ${inbound.provider} e classificado pelo mock de IA como ${ai.documentType}.`,
         status: 'WAITING_REVIEW',
         priority: ai.confidence < 0.75 ? 'HIGH' : 'MEDIUM',
         source: 'whatsapp',
@@ -356,7 +504,7 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
         documentRequestId: null,
         clientId: client?.id ?? null,
         phone,
-        storageKey: `pending://meta/${metaMediaId}`,
+        storageKey,
         aiAnalysis: {
           documentType: ai.documentType,
           competence: ai.competence,
@@ -375,8 +523,8 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
       data: {
         officeId: office.id,
         clientId: client?.id ?? null,
-        title: `Triar documento sem solicitação: ${fileName}`,
-        description: `Documento chegou pelo WhatsApp (${wabaId}), mas não foi vinculado automaticamente a uma solicitação pendente.`,
+        title: `Triar documento sem solicitação: ${inbound.fileName}`,
+        description: `Documento chegou pelo WhatsApp via ${inbound.provider}, mas não foi vinculado automaticamente a uma solicitação pendente.`,
         status: 'WAITING_REVIEW',
         priority: 'HIGH',
         source: 'whatsapp'
@@ -384,13 +532,17 @@ async function handleMessage(app: Parameters<FastifyPluginAsync>[0], msg: MetaMe
     });
   }
 
-  await mediaDownloadQueue.add(
-    'download-media',
-    { documentFileId: fileRecord.id, metaMediaId, filename: fileName, mimeType },
-    { jobId: `media-${metaMediaId}` }
-  );
+  if (inbound.canDownloadWithMetaWorker) {
+    await mediaDownloadQueue.add(
+      'download-media',
+      { documentFileId: fileRecord.id, metaMediaId: inbound.mediaId, filename: inbound.fileName, mimeType: inbound.mimeType },
+      { jobId: `media-${inbound.mediaId}` }
+    );
 
-  app.log.info({ fileId: fileRecord.id, metaMediaId }, 'Job de download de mídia enfileirado');
+    app.log.info({ fileId: fileRecord.id, mediaId: inbound.mediaId }, 'Job de download de mídia Meta enfileirado');
+  } else {
+    app.log.info({ fileId: fileRecord.id, provider: inbound.provider }, 'Documento recebido via Evolution salvo sem worker Meta');
+  }
 }
 
 export default whatsappRoutes;
