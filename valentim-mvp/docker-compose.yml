@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
@@ -30,6 +28,7 @@ services:
       SERVER_URL: "http://localhost:8080"
       AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY:-valentim-secret}"
       DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: "postgresql"
       DATABASE_CONNECTION_URI: "postgresql://valentim:valentim@postgres:5432/valentim"
       REDIS_ENABLED: "true"
       REDIS_URI: "redis://redis:6379"
