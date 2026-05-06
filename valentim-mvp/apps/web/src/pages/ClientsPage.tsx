@@ -91,6 +91,11 @@ export function ClientsPage() {
     setSuccess(null);
   }
 
+  function cancelDeletingClient() {
+    setDeletingClientId(null);
+    setError(null);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const name = form.name.trim();
@@ -221,14 +226,29 @@ export function ClientsPage() {
                     <Badge color="sky">{client.companies?.length || 0} empresas</Badge>
                     <Badge color="amber">{countDocuments(client)} documentos</Badge>
                     <Badge color="violet">{countTasks(client)} tarefas</Badge>
-                    <button className="client-secondary-button" type="button" onClick={() => startEditingClient(client)}>
+                    <button className="client-secondary-button" type="button" onClick={() => startEditingClient(client)} disabled={deletingClientId === client.id}>
                       Editar
                     </button>
                     <button className="client-secondary-button" type="button" onClick={() => startDeletingClient(client)} disabled={deletingClientId === client.id}>
-                      {deletingClientId === client.id ? 'Preparando...' : 'Excluir'}
+                      {deletingClientId === client.id ? 'Confirmando...' : 'Excluir'}
                     </button>
                   </div>
                 </div>
+
+                {deletingClientId === client.id ? (
+                  <div className="client-companies muted-box">
+                    <strong>Tem certeza que deseja excluir este cliente?</strong>
+                    <span>Essa ação será aplicada somente depois da confirmação.</span>
+                    <div className="client-form-actions">
+                      <button className="client-primary-button" type="button">
+                        Confirmar exclusão
+                      </button>
+                      <button className="client-secondary-button" type="button" onClick={cancelDeletingClient}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {client.companies?.length ? (
                   <div className="client-companies">
