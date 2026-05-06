@@ -101,23 +101,38 @@ export function CompaniesPage() {
       return;
     }
 
-    if (editingCompany) {
-      setError('A edição será salva na próxima etapa da implementação.');
-      return;
-    }
-
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
+      if (editingCompany) {
+        const updated = await updateCompany(editingCompany.id, { name, cnpj, regime });
+        setCompanies((current) => current.map((company) => {
+          if (company.id !== editingCompany.id) return company;
+          return {
+            ...company,
+            ...updated,
+            client: company.client,
+            documentRequests: company.documentRequests,
+            deadlines: company.deadlines,
+            charges: company.charges
+          };
+        }));
+        setEditingCompany(null);
+        setCompanyForm(initialCompanyForm);
+        setSuccess('Empresa atualizada com sucesso.');
+        window.setTimeout(() => setSuccess(null), 3000);
+        return;
+      }
+
       await createCompany({ clientId, name, cnpj, regime });
       setCompanyForm(initialCompanyForm);
       setSuccess('Empresa criada com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadCompanies();
     } catch (err) {
-      setError('Não foi possível criar a empresa. Verifique os dados e tente novamente.');
+      setError(editingCompany ? 'Não foi possível atualizar a empresa.' : 'Não foi possível criar a empresa. Verifique os dados e tente novamente.');
     } finally {
       setSaving(false);
     }
