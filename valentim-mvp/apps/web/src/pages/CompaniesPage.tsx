@@ -97,6 +97,11 @@ export function CompaniesPage() {
     setSuccess(null);
   }
 
+  function cancelDeletingCompany() {
+    setDeletingCompanyId(null);
+    setError(null);
+  }
+
   async function handleCompanyFormSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -282,10 +287,25 @@ export function CompaniesPage() {
                       Editar
                     </button>
                     <button className="company-secondary-button" type="button" onClick={() => startDeletingCompany(company)} disabled={deletingCompanyId === company.id}>
-                      {deletingCompanyId === company.id ? 'Preparando...' : 'Excluir'}
+                      {deletingCompanyId === company.id ? 'Confirmando...' : 'Excluir'}
                     </button>
                   </div>
                 </div>
+
+                {deletingCompanyId === company.id ? (
+                  <div className="company-help-box">
+                    <strong>Tem certeza que deseja excluir esta empresa?</strong>
+                    <span>Essa ação será aplicada somente depois da confirmação.</span>
+                    <div className="company-form-actions">
+                      <button className="company-primary-button" type="button">
+                        Confirmar exclusão
+                      </button>
+                      <button className="company-secondary-button" type="button" onClick={cancelDeletingCompany}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
