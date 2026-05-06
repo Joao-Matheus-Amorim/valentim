@@ -96,6 +96,26 @@ export function ClientsPage() {
     setError(null);
   }
 
+  async function handleDeleteClient(client: Client) {
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await deleteClient(client.id);
+      setClients((current) => current.filter((item) => item.id !== client.id));
+      if (editingClient?.id === client.id) {
+        setEditingClient(null);
+        setForm(initialForm);
+      }
+      setSuccess('Cliente excluído com sucesso.');
+      window.setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Não foi possível excluir o cliente. Verifique se ele possui empresas ou vínculos ativos.');
+    } finally {
+      setDeletingClientId(null);
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const name = form.name.trim();
@@ -238,9 +258,9 @@ export function ClientsPage() {
                 {deletingClientId === client.id ? (
                   <div className="client-companies muted-box">
                     <strong>Tem certeza que deseja excluir este cliente?</strong>
-                    <span>Essa ação será aplicada somente depois da confirmação.</span>
+                    <span>Essa ação não poderá ser desfeita se o cliente não possuir vínculos ativos.</span>
                     <div className="client-form-actions">
-                      <button className="client-primary-button" type="button">
+                      <button className="client-primary-button" type="button" onClick={() => handleDeleteClient(client)}>
                         Confirmar exclusão
                       </button>
                       <button className="client-secondary-button" type="button" onClick={cancelDeletingClient}>
