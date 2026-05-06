@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listClients } from '../services/clients';
-import { createCompany, listCompanies, updateCompany } from '../services/companies';
+import { createCompany, deleteCompany, listCompanies, updateCompany } from '../services/companies';
 import type { Client } from '../types/client';
 import type { Company, CreateCompanyInput } from '../types/company';
 import './CompaniesPage.css';
@@ -35,6 +35,7 @@ export function CompaniesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [companyForm, setCompanyForm] = useState<CreateCompanyInput>(initialCompanyForm);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -271,7 +272,7 @@ export function CompaniesPage() {
                     <Badge color="amber">{countDocuments(company)} documentos</Badge>
                     <Badge color="rose">{countDeadlines(company)} prazos</Badge>
                     <Badge color="emerald">{countCharges(company)} cobranças</Badge>
-                    <button className="company-secondary-button" type="button" onClick={() => startEditingCompany(company)}>
+                    <button className="company-secondary-button" type="button" onClick={() => startEditingCompany(company)} disabled={deletingCompanyId === company.id}>
                       Editar
                     </button>
                   </div>
