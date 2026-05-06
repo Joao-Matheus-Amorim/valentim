@@ -9,14 +9,14 @@ import { ArchitecturePage } from './pages/ArchitecturePage';
 import { ClientsPage } from './pages/ClientsPage';
 import { CompaniesPage } from './pages/CompaniesPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { DocumentsPage } from './pages/DocumentsPage';
 import { LoginPage } from './pages/LoginPage';
 import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
 import { TasksPage } from './pages/TasksPage';
 import type { AuthUser } from './types/auth';
 import type { AppSectionId } from './types/ui';
 
-const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks' | 'clients' | 'companies'>, JSX.Element> = {
-  documents: <ModulePlaceholderPage title="Documentos" badge="Fila" color="amber" description="Fila de solicitacoes contabeis por empresa, competencia, vencimento e status de envio." nextSteps={['Consumir GET /api/documents.', 'Criar tela de solicitacao de documentos.', 'Exibir status PENDING, SENT, UNDER_REVIEW, APPROVED e OVERDUE.']} />,
+const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks' | 'clients' | 'companies' | 'documents'>, JSX.Element> = {
   whatsapp: <ModulePlaceholderPage title="WhatsApp" badge="Mensagens" color="green" description="Inbox operacional das mensagens recebidas e enviadas pelo canal do escritorio." nextSteps={['Criar GET /api/whatsapp/messages.', 'Listar conversas por cliente e telefone.', 'Adicionar envio de templates mockados.']} />,
   review: <ModulePlaceholderPage title="Triagem IA" badge="Revisao" color="violet" description="Caixa de revisao para documentos com analise incerta ou sem associacao automatica segura." nextSteps={['Criar GET /api/unmatched-documents.', 'Permitir associar documento a uma solicitacao.', 'Mostrar confidence, resumo e flags da IA.']} />,
   deadlines: <ModulePlaceholderPage title="Prazos" badge="Controle" color="rose" description="Calendario operacional de vencimentos, atrasos e lembretes automaticos." nextSteps={['Consumir GET /api/deadlines.', 'Criar visao por vencimento.', 'Destacar atrasados e proximos 7 dias.']} />,
@@ -43,6 +43,7 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
     if (active === 'tasks') return <TasksPage />;
     if (active === 'clients') return <ClientsPage />;
     if (active === 'companies') return <CompaniesPage />;
+    if (active === 'documents') return <DocumentsPage />;
     if (active === 'architecture') return <ArchitecturePage />;
     return modulePages[active];
   }, [active]);
