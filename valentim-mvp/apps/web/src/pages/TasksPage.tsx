@@ -2,22 +2,20 @@ import { FormEvent, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { useTasks } from '../context/TasksContext';
+import { isFinished, isOverdue, isDueToday } from '../utils/task';
+import { formatDate } from '../utils/format';
 import type { Color } from '../types/ui';
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus } from '../types/task';
 import { TASK_PRIORITIES, TASK_SOURCES, TASK_STATUSES } from '../types/task';
 import './TasksPage.css';
 
 const initialForm: CreateTaskInput = {
-  title: '',
-  description: '',
-  status: 'PENDING',
-  priority: 'MEDIUM',
-  source: 'manual',
-  dueDate: ''
+  title: '', description: '', status: 'PENDING',
+  priority: 'MEDIUM', source: 'manual', dueDate: ''
 };
 
-const statusLabels = Object.fromEntries(TASK_STATUSES.map((item) => [item.value, item.label]));
-const priorityLabels = Object.fromEntries(TASK_PRIORITIES.map((item) => [item.value, item.label]));
+const statusLabels = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.label]));
+const priorityLabels = Object.fromEntries(TASK_PRIORITIES.map((p) => [p.value, p.label]));
 
 function priorityColor(priority: TaskPriority): Color {
   if (priority === 'URGENT') return 'rose';
@@ -35,34 +33,7 @@ function statusColor(status: TaskStatus): Color {
   return 'slate';
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return 'Sem prazo';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Prazo inválido';
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function isFinished(task: Task) {
-  return task.status === 'DONE' || task.status === 'CANCELED';
-}
-
-function isOverdue(task: Task) {
-  if (!task.dueDate || isFinished(task)) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dueDate = new Date(task.dueDate);
-  dueDate.setHours(0, 0, 0, 0);
-  return dueDate < today;
-}
-
-function isDueToday(task: Task) {
-  if (!task.dueDate || isFinished(task)) return false;
-  const today = new Date();
-  const dueDate = new Date(task.dueDate);
-  return today.toDateString() === dueDate.toDateString();
-}
-
-function normalizeTaskPayload(form: CreateTaskInput): CreateTaskInput {
+function normalizePayload(form: CreateTaskInput): CreateTaskInput {
   return {
     ...form,
     title: form.title.trim(),
@@ -92,13 +63,8 @@ export function TasksPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const payload = normalizeTaskPayload(form);
-
-    if (!payload.title) {
-      setLocalError('Informe um título para criar a tarefa.');
-      return;
-    }
-
+    const payload = normalizePayload(form);
+    if (!payload.title) { setLocalError('Informe um título para criar a tarefa.'); return; }
     setSaving(true);
     setLocalError(null);
     const created = await createTask(payload);
@@ -132,28 +98,25 @@ export function TasksPage() {
       <div className="grid two tasks-workspace">
         <Card title="Criar nova tarefa" color="green">
           <form className="task-form" onSubmit={handleSubmit}>
-            <label>Título<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Ex.: Cobrar DAS de abril" /></label>
-            <label>Descrição<textarea value={form.description || ''} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Contexto, instruções ou observações para a equipe" /></label>
-
+            <label>Título<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Ex.: Cobrar DAS de abril" /></label>
+            <label>Descrição<textarea value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Contexto, instruções ou observações para a equipe" /></label>
             <div className="task-form-grid">
-              <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as TaskPriority })}>{TASK_PRIORITIES.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}</select></label>
-              <label>Origem<select value={form.source} onChange={(event) => setForm({ ...form, source: event.target.value })}>{TASK_SOURCES.map((source) => <option key={source} value={source}>{source}</option>)}</select></label>
+              <label>Prioridade<select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as TaskPriority })}>{TASK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
+              <label>Origem<select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{TASK_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
             </div>
-
             <div className="task-form-grid">
-              <label>Status inicial<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as TaskStatus })}>{TASK_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
-              <label>Prazo<input type="date" value={form.dueDate || ''} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} /></label>
+              <label>Status inicial<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as TaskStatus })}>{TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+              <label>Prazo<input type="date" value={form.dueDate || ''} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></label>
             </div>
-
             <button className="task-primary-button" type="submit" disabled={saving}>{saving ? 'Criando...' : 'Criar tarefa'}</button>
           </form>
         </Card>
 
         <Card title="Filtros operacionais" color="slate">
           <div className="task-filters">
-            <label>Status<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="ALL">Todos</option>{TASK_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
-            <label>Prioridade<select value={filters.priority} onChange={(event) => setFilters({ ...filters, priority: event.target.value })}><option value="ALL">Todas</option>{TASK_PRIORITIES.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}</select></label>
-            <label>Origem<select value={filters.source} onChange={(event) => setFilters({ ...filters, source: event.target.value })}><option value="ALL">Todas</option>{TASK_SOURCES.map((source) => <option key={source} value={source}>{source}</option>)}</select></label>
+            <label>Status<select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="ALL">Todos</option>{TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+            <label>Prioridade<select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}><option value="ALL">Todas</option>{TASK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
+            <label>Origem<select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })}><option value="ALL">Todas</option>{TASK_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
             <button className="task-secondary-button" type="button" onClick={() => setFilters({ status: 'ALL', priority: 'ALL', source: 'ALL' })}>Limpar filtros</button>
           </div>
         </Card>
@@ -161,17 +124,35 @@ export function TasksPage() {
 
       <Card title="Fila de execução" color="slate">
         {loading ? <p className="lead">Carregando tarefas...</p> : null}
-        {!loading && filteredTasks.length === 0 ? <div className="tasks-empty"><strong>Nenhuma tarefa encontrada.</strong><span>Crie a primeira tarefa ou ajuste os filtros.</span></div> : null}
+        {!loading && filteredTasks.length === 0
+          ? <div className="tasks-empty"><strong>Nenhuma tarefa encontrada.</strong><span>Crie a primeira tarefa ou ajuste os filtros.</span></div>
+          : null}
         {!loading && filteredTasks.length > 0 ? (
           <div className="tasks-list">
-            {filteredTasks.map((task) => (
+            {filteredTasks.map((task: Task) => (
               <article className={isOverdue(task) ? 'task-card overdue' : 'task-card'} key={task.id}>
                 <div className="task-card-main">
-                  <div className="task-card-head"><strong>{task.title}</strong><div className="task-badges"><Badge color={priorityColor(task.priority)}>{priorityLabels[task.priority]}</Badge><Badge color={statusColor(task.status)}>{statusLabels[task.status]}</Badge></div></div>
+                  <div className="task-card-head">
+                    <strong>{task.title}</strong>
+                    <div className="task-badges">
+                      <Badge color={priorityColor(task.priority)}>{priorityLabels[task.priority]}</Badge>
+                      <Badge color={statusColor(task.status)}>{statusLabels[task.status]}</Badge>
+                    </div>
+                  </div>
                   {task.description ? <p>{task.description}</p> : null}
-                  <div className="task-meta"><span>Origem: {task.source || 'manual'}</span><span>Prazo: {formatDate(task.dueDate)}</span>{isDueToday(task) ? <span className="task-due-today">vence hoje</span> : null}{isOverdue(task) ? <span className="task-overdue">atrasada</span> : null}</div>
+                  <div className="task-meta">
+                    <span>Origem: {task.source || 'manual'}</span>
+                    <span>Prazo: {formatDate(task.dueDate)}</span>
+                    {isDueToday(task) ? <span className="task-due-today">vence hoje</span> : null}
+                    {isOverdue(task) ? <span className="task-overdue">atrasada</span> : null}
+                  </div>
                 </div>
-                <div className="task-card-actions"><select value={task.status} onChange={(event) => changeTaskStatus(task.id, event.target.value as TaskStatus)}>{TASK_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select><button type="button" onClick={() => completeTask(task.id)} disabled={task.status === 'DONE'}>Concluir</button></div>
+                <div className="task-card-actions">
+                  <select value={task.status} onChange={(e) => changeTaskStatus(task.id, e.target.value as TaskStatus)}>
+                    {TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                  <button type="button" onClick={() => completeTask(task.id)} disabled={isFinished(task)}>Concluir</button>
+                </div>
               </article>
             ))}
           </div>

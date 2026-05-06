@@ -2,19 +2,10 @@ import { useMemo } from 'react';
 import { Card } from '../components/Card';
 import { Badge } from '../components/Badge';
 import { useTasks } from '../context/TasksContext';
+import { isFinished, isOverdue } from '../utils/task';
+import { formatDate } from '../utils/format';
 import type { Task } from '../types/task';
 import './DashboardPage.css';
-
-function isFinished(task: Task) {
-  return task.status === 'DONE' || task.status === 'CANCELED';
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return 'Sem prazo';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Prazo inválido';
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
 
 export function DashboardPage() {
   const { tasks, metrics, loading, error, refreshTasks } = useTasks();
@@ -22,12 +13,12 @@ export function DashboardPage() {
   const priorityTasks = useMemo(() => {
     return tasks
       .filter((task) => !isFinished(task))
-      .sort((first, second) => {
-        const priorityWeight: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-        const firstWeight = priorityWeight[first.priority] ?? 4;
-        const secondWeight = priorityWeight[second.priority] ?? 4;
-        if (firstWeight !== secondWeight) return firstWeight - secondWeight;
-        return new Date(first.dueDate || '2999-12-31').getTime() - new Date(second.dueDate || '2999-12-31').getTime();
+      .sort((a, b) => {
+        const w: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+        const wa = w[a.priority] ?? 4;
+        const wb = w[b.priority] ?? 4;
+        if (wa !== wb) return wa - wb;
+        return new Date(a.dueDate || '2999-12-31').getTime() - new Date(b.dueDate || '2999-12-31').getTime();
       })
       .slice(0, 5);
   }, [tasks]);
@@ -56,16 +47,20 @@ export function DashboardPage() {
         <Card title="Fila crítica do dia" color="slate">
           {loading ? <p className="lead">Carregando tarefas...</p> : null}
           {error ? <p className="lead">{error}</p> : null}
-          {!loading && !error && priorityTasks.length === 0 ? <p className="lead">Nenhuma tarefa crítica ou aberta encontrada.</p> : null}
+          {!loading && !error && priorityTasks.length === 0
+            ? <p className="lead">Nenhuma tarefa crítica ou aberta encontrada.</p>
+            : null}
           {!loading && !error && priorityTasks.length > 0 ? (
             <div className="dashboard-priority-list">
-              {priorityTasks.map((task) => (
-                <div className="dashboard-priority-item" key={task.id}>
+              {priorityTasks.map((task: Task) => (
+                <div className={`dashboard-priority-item${isOverdue(task) ? ' overdue' : ''}`} key={task.id}>
                   <div>
                     <strong>{task.title}</strong>
                     <span>{task.source || 'manual'} · {formatDate(task.dueDate)}</span>
                   </div>
-                  <Badge color={task.priority === 'URGENT' ? 'rose' : task.priority === 'HIGH' ? 'amber' : 'sky'}>{task.priority}</Badge>
+                  <Badge color={task.priority === 'URGENT' ? 'rose' : task.priority === 'HIGH' ? 'amber' : 'sky'}>
+                    {task.priority}
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -77,21 +72,17 @@ export function DashboardPage() {
             <li>▸ Conectar documentos pendentes à criação automática de tarefas.</li>
             <li>▸ Criar alertas por prazo, vencimento e prioridade.</li>
             <li>▸ Enviar lembretes WhatsApp com base nas tarefas abertas.</li>
-            <li>▸ Criar painel “O que fazer agora?” por usuário responsável.</li>
+            <li>▸ Criar painel "O que fazer agora?" por usuário responsável.</li>
           </ul>
         </Card>
       </div>
 
       <Card title="Fluxo operacional Valentim" color="slate">
         <div className="dashboard-flow">
-          <span>Cliente envia no WhatsApp</span>
-          <strong>→</strong>
-          <span>IA classifica</span>
-          <strong>→</strong>
-          <span>Sistema cria tarefa</span>
-          <strong>→</strong>
-          <span>Equipe executa</span>
-          <strong>→</strong>
+          <span>Cliente envia no WhatsApp</span><strong>→</strong>
+          <span>IA classifica</span><strong>→</strong>
+          <span>Sistema cria tarefa</span><strong>→</strong>
+          <span>Equipe executa</span><strong>→</strong>
           <span>Dashboard acompanha</span>
         </div>
       </Card>

@@ -3,8 +3,8 @@ import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 
 const proposalsRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/api/proposals', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+  app.get('/api/proposals', { preHandler: authMiddleware }, async (request) => {
+    const { officeId } = request.user;
     const proposals = await prisma.proposal.findMany({
       where: { client: { officeId } },
       include: { client: true }
@@ -13,7 +13,7 @@ const proposalsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/api/proposals', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const { clientId, title, description, value, status } = request.body as any;
     const client = await prisma.client.findFirst({ where: { id: clientId, officeId } });
     if (!client) return reply.code(400).send({ error: 'Invalid client' });
@@ -24,14 +24,24 @@ const proposalsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put('/api/proposals/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const { officeId } = request.user;
     const { id } = request.params as any;
     const data = request.body as any;
-    await prisma.proposal.update({ where: { id }, data });
-    return { updated: true };
+    const existing = await prisma.proposal.findFirst({
+      where: { id, client: { officeId } }
+    });
+    if (!existing) return reply.code(404).send({ error: 'Proposal not found' });
+    const updated = await prisma.proposal.update({ where: { id }, data });
+    return updated;
   });
 
   app.delete('/api/proposals/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const { officeId } = request.user;
     const { id } = request.params as any;
+    const existing = await prisma.proposal.findFirst({
+      where: { id, client: { officeId } }
+    });
+    if (!existing) return reply.code(404).send({ error: 'Proposal not found' });
     await prisma.proposal.delete({ where: { id } });
     return { deleted: true };
   });

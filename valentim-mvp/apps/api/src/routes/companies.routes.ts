@@ -3,50 +3,47 @@ import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 
 const companiesRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/api/companies', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
-    const companies = await prisma.company.findMany({
+  app.get('/api/companies', { preHandler: authMiddleware }, async (request) => {
+    const { officeId } = request.user;
+    return prisma.company.findMany({
       where: { client: { officeId } },
-      include: { documentRequests: true }
+      include: { client: true }
     });
-    return companies;
   });
 
   app.get('/api/companies/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const { id } = request.params as any;
     const company = await prisma.company.findFirst({
       where: { id, client: { officeId } },
-      include: { documentRequests: true }
+      include: { client: true, documentRequests: true, deadlines: true, charges: true }
     });
-    if (!company) return reply.code(404).send({ error: 'Not found' });
+    if (!company) return reply.code(404).send({ error: 'Company not found' });
     return company;
   });
 
   app.post('/api/companies', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const { clientId, name, cnpj, regime } = request.body as any;
     const client = await prisma.client.findFirst({ where: { id: clientId, officeId } });
     if (!client) return reply.code(400).send({ error: 'Invalid client' });
-    const company = await prisma.company.create({ data: { clientId, name, cnpj, regime } });
-    return company;
+    return prisma.company.create({ data: { clientId, name, cnpj, regime } });
   });
 
   app.put('/api/companies/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const { id } = request.params as any;
     const data = request.body as any;
-    const company = await prisma.company.findFirst({ where: { id, client: { officeId } } });
-    if (!company) return reply.code(404).send({ error: 'Not found' });
-    await prisma.company.update({ where: { id }, data });
-    return { updated: true };
+    const existing = await prisma.company.findFirst({ where: { id, client: { officeId } } });
+    if (!existing) return reply.code(404).send({ error: 'Company not found' });
+    return prisma.company.update({ where: { id }, data });
   });
 
   app.delete('/api/companies/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const { id } = request.params as any;
-    const company = await prisma.company.findFirst({ where: { id, client: { officeId } } });
-    if (!company) return reply.code(404).send({ error: 'Not found' });
+    const existing = await prisma.company.findFirst({ where: { id, client: { officeId } } });
+    if (!existing) return reply.code(404).send({ error: 'Company not found' });
     await prisma.company.delete({ where: { id } });
     return { deleted: true };
   });

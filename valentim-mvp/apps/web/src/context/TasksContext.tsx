@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { completeTask as completeTaskRequest, createTask as createTaskRequest, listTasks, updateTask as updateTaskRequest } from '../services/tasks';
+import { isFinished, isOverdue } from '../utils/task';
 import type { CreateTaskInput, Task, TaskStatus, UpdateTaskInput } from '../types/task';
 
 interface ToastState {
@@ -31,19 +32,6 @@ interface TasksContextValue {
 
 const TasksContext = createContext<TasksContextValue | null>(null);
 
-function isFinished(task: Task) {
-  return task.status === 'DONE' || task.status === 'CANCELED';
-}
-
-function isOverdue(task: Task) {
-  if (!task.dueDate || isFinished(task)) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dueDate = new Date(task.dueDate);
-  dueDate.setHours(0, 0, 0, 0);
-  return dueDate < today;
-}
-
 function getTaskMetrics(tasks: Task[]): TaskMetrics {
   return {
     open: tasks.filter((task) => !isFinished(task)).length,
@@ -55,18 +43,13 @@ function getTaskMetrics(tasks: Task[]): TaskMetrics {
 
 function sortTasks(tasks: Task[]) {
   const priorityWeight: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-
   return [...tasks].sort((first, second) => {
     const finishedDiff = Number(isFinished(first)) - Number(isFinished(second));
     if (finishedDiff !== 0) return finishedDiff;
-
-    const firstPriority = priorityWeight[first.priority] ?? 4;
-    const secondPriority = priorityWeight[second.priority] ?? 4;
-    if (firstPriority !== secondPriority) return firstPriority - secondPriority;
-
-    const firstDue = new Date(first.dueDate || '2999-12-31').getTime();
-    const secondDue = new Date(second.dueDate || '2999-12-31').getTime();
-    return firstDue - secondDue;
+    const fw = priorityWeight[first.priority] ?? 4;
+    const sw = priorityWeight[second.priority] ?? 4;
+    if (fw !== sw) return fw - sw;
+    return new Date(first.dueDate || '2999-12-31').getTime() - new Date(second.dueDate || '2999-12-31').getTime();
   });
 }
 
@@ -78,49 +61,36 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const hasLoadedRef = useRef(false);
   const inFlightRef = useRef<Promise<void> | null>(null);
 
-  const showToast = useCallback((nextToast: ToastState) => {
-    setToast(nextToast);
+  const showToast = useCallback((next: ToastState) => {
+    setToast(next);
     window.setTimeout(() => setToast(null), 3200);
   }, []);
 
   const loadTasks = useCallback(async (force = false) => {
     if (inFlightRef.current) return inFlightRef.current;
     if (hasLoadedRef.current && !force) return;
-
     setLoading(true);
     setError(null);
-
     const request = listTasks()
-      .then((data) => {
-        setTasks(sortTasks(data));
-        hasLoadedRef.current = true;
-      })
-      .catch(() => {
-        setError('Não foi possível carregar as tarefas.');
-      })
-      .finally(() => {
-        setLoading(false);
-        inFlightRef.current = null;
-      });
-
+      .then((data) => { setTasks(sortTasks(data)); hasLoadedRef.current = true; })
+      .catch(() => { setError('Não foi possível carregar as tarefas.'); })
+      .finally(() => { setLoading(false); inFlightRef.current = null; });
     inFlightRef.current = request;
     return request;
   }, []);
 
   const refreshTasks = useCallback(() => loadTasks(true), [loadTasks]);
 
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+  useEffect(() => { loadTasks(); }, [loadTasks]);
 
   const createTask = useCallback(async (input: CreateTaskInput) => {
     setError(null);
     try {
       const created = await createTaskRequest(input);
-      setTasks((current) => sortTasks([created, ...current]));
+      setTasks((cur) => sortTasks([created, ...cur]));
       showToast({ type: 'success', message: 'Tarefa criada com sucesso.' });
       return created;
-    } catch (err) {
+    } catch {
       setError('Não foi possível criar a tarefa.');
       showToast({ type: 'error', message: 'Erro ao criar tarefa.' });
       return null;
@@ -131,10 +101,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const updated = await updateTaskRequest(id, input);
-      setTasks((current) => sortTasks(current.map((task) => (task.id === id ? updated : task))));
+      setTasks((cur) => sortTasks(cur.map((t) => (t.id === id ? updated : t))));
       showToast({ type: 'success', message: 'Tarefa atualizada.' });
       return updated;
-    } catch (err) {
+    } catch {
       setError('Não foi possível atualizar a tarefa.');
       showToast({ type: 'error', message: 'Erro ao atualizar tarefa.' });
       return null;
@@ -147,10 +117,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const updated = await completeTaskRequest(id);
-      setTasks((current) => sortTasks(current.map((task) => (task.id === id ? updated : task))));
+      setTasks((cur) => sortTasks(cur.map((t) => (t.id === id ? updated : t))));
       showToast({ type: 'success', message: 'Tarefa concluída.' });
       return updated;
-    } catch (err) {
+    } catch {
       setError('Não foi possível concluir a tarefa.');
       showToast({ type: 'error', message: 'Erro ao concluir tarefa.' });
       return null;
@@ -158,17 +128,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, [showToast]);
 
   const value = useMemo<TasksContextValue>(() => ({
-    tasks,
-    metrics: getTaskMetrics(tasks),
-    loading,
-    error,
-    toast,
-    loadTasks,
-    refreshTasks,
-    createTask,
-    updateTask,
-    changeTaskStatus,
-    completeTask,
+    tasks, metrics: getTaskMetrics(tasks), loading, error, toast,
+    loadTasks, refreshTasks, createTask, updateTask, changeTaskStatus, completeTask,
     clearToast: () => setToast(null)
   }), [tasks, loading, error, toast, loadTasks, refreshTasks, createTask, updateTask, changeTaskStatus, completeTask]);
 
@@ -177,8 +138,6 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
 export function useTasks() {
   const context = useContext(TasksContext);
-  if (!context) {
-    throw new Error('useTasks must be used inside TasksProvider');
-  }
+  if (!context) throw new Error('useTasks must be used inside TasksProvider');
   return context;
 }
