@@ -26,6 +26,7 @@
     "check:api": "pnpm prisma:generate && pnpm --filter api build",
     "security:audit": "pnpm audit --prod",
     "security:audit:all": "pnpm audit",
+    "verify": "pnpm check && pnpm security:audit",
     "prisma:generate": "pnpm --filter api prisma:generate",
     "prisma:migrate": "pnpm --filter api prisma:migrate",
     "prisma:seed": "pnpm --filter api prisma:seed"
