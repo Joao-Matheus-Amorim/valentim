@@ -77,6 +77,13 @@ export function ClientsPage() {
     setSuccess(null);
   }
 
+  function cancelEditingClient() {
+    setEditingClient(null);
+    setForm(initialForm);
+    setError(null);
+    setSuccess(null);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const name = form.name.trim();
@@ -163,7 +170,14 @@ export function ClientsPage() {
               Telefone WhatsApp
               <input value={form.phone || ''} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Ex.: 5521999999999" />
             </label>
-            <button className="client-primary-button" type="submit" disabled={saving}>{saving ? savingLabel : submitLabel}</button>
+            <div className="client-form-actions">
+              <button className="client-primary-button" type="submit" disabled={saving}>{saving ? savingLabel : submitLabel}</button>
+              {editingClient ? (
+                <button className="client-secondary-button" type="button" onClick={cancelEditingClient} disabled={saving}>
+                  Cancelar edição
+                </button>
+              ) : null}
+            </div>
           </form>
         </Card>
 
