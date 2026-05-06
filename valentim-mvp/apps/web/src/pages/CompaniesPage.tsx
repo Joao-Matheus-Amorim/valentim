@@ -4,8 +4,15 @@ import { Card } from '../components/Card';
 import { listClients } from '../services/clients';
 import { listCompanies } from '../services/companies';
 import type { Client } from '../types/client';
-import type { Company } from '../types/company';
+import type { Company, CreateCompanyInput } from '../types/company';
 import './CompaniesPage.css';
+
+const initialCompanyForm: CreateCompanyInput = {
+  clientId: '',
+  name: '',
+  cnpj: '',
+  regime: ''
+};
 
 function formatNullable(value?: string | null) {
   return value?.trim() || 'Não informado';
@@ -26,6 +33,7 @@ function countCharges(company: Company) {
 export function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [companyForm, setCompanyForm] = useState<CreateCompanyInput>(initialCompanyForm);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
