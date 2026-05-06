@@ -42,6 +42,8 @@ services:
       CACHE_REDIS_SAVE_INSTANCES: "false"
       REDIS_ENABLED: "true"
       REDIS_URI: "redis://redis:6379/6"
+      QRCODE_LIMIT: "30"
+      QRCODE_COLOR: "#198754"
     depends_on:
       redis:
         condition: service_healthy
