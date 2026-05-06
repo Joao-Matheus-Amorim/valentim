@@ -101,6 +101,11 @@ export function CompaniesPage() {
       return;
     }
 
+    if (editingCompany) {
+      setError('A edição será salva na próxima etapa da implementação.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -117,6 +122,10 @@ export function CompaniesPage() {
       setSaving(false);
     }
   }
+
+  const formTitle = editingCompany ? 'Editar empresa' : 'Cadastrar empresa';
+  const submitLabel = editingCompany ? 'Salvar alterações' : 'Criar empresa';
+  const savingLabel = editingCompany ? 'Salvando...' : 'Criando...';
 
   return (
     <div className="stack companies-page">
@@ -142,14 +151,17 @@ export function CompaniesPage() {
       </div>
 
       <div className="grid two companies-workspace">
-        <Card title="Cadastrar empresa" color="sky">
+        <Card title={formTitle} color={editingCompany ? 'amber' : 'sky'}>
           <form className="company-form" onSubmit={handleCompanyFormSubmit}>
+            {editingCompany ? (
+              <p className="lead">Editando <strong>{editingCompany.name}</strong>. Revise os dados antes de salvar.</p>
+            ) : null}
             <label>
               Cliente responsável
               <select
                 value={companyForm.clientId}
                 onChange={(event) => setCompanyForm({ ...companyForm, clientId: event.target.value })}
-                disabled={loading || saving || clients.length === 0}
+                disabled={loading || saving || clients.length === 0 || Boolean(editingCompany)}
               >
                 <option value="">Selecione um cliente</option>
                 {clients.map((client) => (
@@ -185,7 +197,7 @@ export function CompaniesPage() {
               />
             </label>
             <button className="company-primary-button" type="submit" disabled={loading || saving || clients.length === 0}>
-              {saving ? 'Criando...' : 'Criar empresa'}
+              {saving ? savingLabel : submitLabel}
             </button>
           </form>
         </Card>
