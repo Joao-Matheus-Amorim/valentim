@@ -83,6 +83,13 @@ export function CompaniesPage() {
     setSuccess(null);
   }
 
+  function cancelEditingCompany() {
+    setEditingCompany(null);
+    setCompanyForm(initialCompanyForm);
+    setError(null);
+    setSuccess(null);
+  }
+
   async function handleCompanyFormSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -211,9 +218,16 @@ export function CompaniesPage() {
                 disabled={saving}
               />
             </label>
-            <button className="company-primary-button" type="submit" disabled={loading || saving || clients.length === 0}>
-              {saving ? savingLabel : submitLabel}
-            </button>
+            <div className="company-form-actions">
+              <button className="company-primary-button" type="submit" disabled={loading || saving || clients.length === 0}>
+                {saving ? savingLabel : submitLabel}
+              </button>
+              {editingCompany ? (
+                <button className="company-secondary-button" type="button" onClick={cancelEditingCompany} disabled={saving}>
+                  Cancelar edição
+                </button>
+              ) : null}
+            </div>
           </form>
         </Card>
 
