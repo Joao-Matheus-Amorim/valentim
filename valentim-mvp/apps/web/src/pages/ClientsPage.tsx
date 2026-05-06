@@ -22,6 +22,21 @@ function countTasks(client: Client) {
   return client.tasks?.length || 0;
 }
 
+function getClientContactStatus(client: Client) {
+  return client.phone?.trim() ? 'Contato disponível' : 'Telefone pendente';
+}
+
+function getNextClientStep(client: Client) {
+  const companies = client.companies?.length || 0;
+  const documents = countDocuments(client);
+  const tasks = countTasks(client);
+
+  if (companies === 0) return 'Cadastre uma empresa para este cliente.';
+  if (documents === 0) return 'Crie solicitações de documentos para este cliente.';
+  if (tasks === 0) return 'Crie tarefas operacionais para acompanhar este cliente.';
+  return 'Acompanhe documentos e tarefas vinculadas.';
+}
+
 export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState<CreateClientInput>(initialForm);
@@ -252,6 +267,23 @@ export function ClientsPage() {
                     <button className="client-secondary-button" type="button" onClick={() => startDeletingClient(client)} disabled={deletingClientId === client.id}>
                       {deletingClientId === client.id ? 'Confirmando...' : 'Excluir'}
                     </button>
+                  </div>
+                </div>
+
+                <div className="client-operational-summary">
+                  <div className="client-operational-grid">
+                    <div className="client-operational-item">
+                      <strong>Contato</strong>
+                      <span>{getClientContactStatus(client)}</span>
+                    </div>
+                    <div className="client-operational-item">
+                      <strong>Vínculos</strong>
+                      <span>{client.companies?.length || 0} empresas · {countDocuments(client)} documentos · {countTasks(client)} tarefas</span>
+                    </div>
+                  </div>
+                  <div className="client-next-step">
+                    <strong>Próximo passo</strong>
+                    <span>{getNextClientStep(client)}</span>
                   </div>
                 </div>
 
