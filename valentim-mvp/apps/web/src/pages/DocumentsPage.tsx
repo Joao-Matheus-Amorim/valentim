@@ -42,6 +42,7 @@ export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
+  const [reviewingDocumentId, setReviewingDocumentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
