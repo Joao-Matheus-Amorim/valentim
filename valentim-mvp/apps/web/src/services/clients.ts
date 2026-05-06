@@ -17,7 +17,7 @@ export async function createClient(input: CreateClientInput) {
 }
 
 export async function updateClient(id: string, input: UpdateClientInput) {
-  const response = await api.put<{ updated: true }>(`/clients/${id}`, input);
+  const response = await api.put<Client>(`/clients/${id}`, input);
   return response.data;
 }
 
