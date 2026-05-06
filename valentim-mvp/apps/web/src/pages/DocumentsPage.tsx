@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
+import { listCompanies } from '../services/companies';
 import { listDocuments } from '../services/documents';
+import type { Company } from '../types/company';
 import type { DocumentRequest, DocumentStatus } from '../types/document';
 import './DocumentsPage.css';
 
@@ -29,6 +31,7 @@ function getStatusBadgeColor(status: DocumentStatus) {
 
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,8 +40,12 @@ export function DocumentsPage() {
     setError(null);
 
     try {
-      const data = await listDocuments();
-      setDocuments(data);
+      const [documentsData, companiesData] = await Promise.all([
+        listDocuments(),
+        listCompanies()
+      ]);
+      setDocuments(documentsData);
+      setCompanies(companiesData);
     } catch (err) {
       setError('Não foi possível carregar os documentos. Verifique API/token.');
     } finally {
@@ -83,9 +90,16 @@ export function DocumentsPage() {
       </div>
 
       <Card title="Fila de documentos" color="slate">
-        {loading ? <p className="lead">Carregando documentos...</p> : null}
+        {loading ? <p className="lead">Carregando documentos e empresas...</p> : null}
 
-        {!loading && documents.length === 0 ? (
+        {!loading && companies.length === 0 ? (
+          <div className="documents-empty">
+            <strong>Nenhuma empresa disponível.</strong>
+            <span>Cadastre uma empresa antes de criar solicitações de documentos.</span>
+          </div>
+        ) : null}
+
+        {!loading && companies.length > 0 && documents.length === 0 ? (
           <div className="documents-empty">
             <strong>Nenhum documento encontrado.</strong>
             <span>Crie solicitações vinculadas a empresas para acompanhar a entrega mensal.</span>
