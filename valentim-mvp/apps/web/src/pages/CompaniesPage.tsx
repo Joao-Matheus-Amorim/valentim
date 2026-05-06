@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
+import { listClients } from '../services/clients';
 import { listCompanies } from '../services/companies';
+import type { Client } from '../types/client';
 import type { Company } from '../types/company';
 import './CompaniesPage.css';
 
@@ -23,6 +25,7 @@ function countCharges(company: Company) {
 
 export function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,8 +34,12 @@ export function CompaniesPage() {
     setError(null);
 
     try {
-      const data = await listCompanies();
-      setCompanies(data);
+      const [companiesData, clientsData] = await Promise.all([
+        listCompanies(),
+        listClients()
+      ]);
+      setCompanies(companiesData);
+      setClients(clientsData);
     } catch (err) {
       setError('Não foi possível carregar as empresas. Verifique API/token.');
     } finally {
@@ -76,9 +83,16 @@ export function CompaniesPage() {
       </div>
 
       <Card title="Carteira de empresas" color="slate">
-        {loading ? <p className="lead">Carregando empresas...</p> : null}
+        {loading ? <p className="lead">Carregando empresas e clientes...</p> : null}
 
-        {!loading && companies.length === 0 ? (
+        {!loading && clients.length === 0 ? (
+          <div className="companies-empty">
+            <strong>Nenhum cliente disponível.</strong>
+            <span>Cadastre um cliente antes de criar empresas.</span>
+          </div>
+        ) : null}
+
+        {!loading && clients.length > 0 && companies.length === 0 ? (
           <div className="companies-empty">
             <strong>Nenhuma empresa encontrada.</strong>
             <span>Cadastre uma empresa vinculada a um cliente para iniciar o fluxo contábil.</span>
