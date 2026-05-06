@@ -87,23 +87,36 @@ export function ClientsPage() {
       return;
     }
 
-    if (editingClient) {
-      setError('A edição será salva na próxima etapa da implementação.');
-      return;
-    }
-
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
+      if (editingClient) {
+        const updated = await updateClient(editingClient.id, { name, phone });
+        setClients((current) => current.map((client) => {
+          if (client.id !== editingClient.id) return client;
+          return {
+            ...client,
+            ...updated,
+            companies: client.companies,
+            tasks: client.tasks
+          };
+        }));
+        setEditingClient(null);
+        setForm(initialForm);
+        setSuccess('Cliente atualizado com sucesso.');
+        window.setTimeout(() => setSuccess(null), 3000);
+        return;
+      }
+
       const created = await createClient({ name, phone });
       setClients((current) => [created, ...current]);
       setForm(initialForm);
       setSuccess('Cliente criado com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError('Não foi possível criar o cliente.');
+      setError(editingClient ? 'Não foi possível atualizar o cliente.' : 'Não foi possível criar o cliente.');
     } finally {
       setSaving(false);
     }
