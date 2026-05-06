@@ -7,6 +7,7 @@ import { getStoredToken } from './services/api';
 import { getMe, logout } from './services/auth';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { ClientsPage } from './pages/ClientsPage';
+import { CompaniesPage } from './pages/CompaniesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
@@ -14,8 +15,7 @@ import { TasksPage } from './pages/TasksPage';
 import type { AuthUser } from './types/auth';
 import type { AppSectionId } from './types/ui';
 
-const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks' | 'clients'>, JSX.Element> = {
-  companies: <ModulePlaceholderPage title="Empresas" badge="Cadastro" color="sky" description="Area para visualizar empresas vinculadas aos clientes, CNPJ, regime tributario e documentos esperados." nextSteps={['Consumir GET /api/companies.', 'Criar formulario de nova empresa.', 'Mostrar documentos mensais por empresa.']} />,
+const modulePages: Record<Exclude<AppSectionId, 'dashboard' | 'architecture' | 'tasks' | 'clients' | 'companies'>, JSX.Element> = {
   documents: <ModulePlaceholderPage title="Documentos" badge="Fila" color="amber" description="Fila de solicitacoes contabeis por empresa, competencia, vencimento e status de envio." nextSteps={['Consumir GET /api/documents.', 'Criar tela de solicitacao de documentos.', 'Exibir status PENDING, SENT, UNDER_REVIEW, APPROVED e OVERDUE.']} />,
   whatsapp: <ModulePlaceholderPage title="WhatsApp" badge="Mensagens" color="green" description="Inbox operacional das mensagens recebidas e enviadas pelo canal do escritorio." nextSteps={['Criar GET /api/whatsapp/messages.', 'Listar conversas por cliente e telefone.', 'Adicionar envio de templates mockados.']} />,
   review: <ModulePlaceholderPage title="Triagem IA" badge="Revisao" color="violet" description="Caixa de revisao para documentos com analise incerta ou sem associacao automatica segura." nextSteps={['Criar GET /api/unmatched-documents.', 'Permitir associar documento a uma solicitacao.', 'Mostrar confidence, resumo e flags da IA.']} />,
@@ -42,6 +42,7 @@ function AuthenticatedApp({ user, onLogout }: { user: AuthUser; onLogout: () => 
     if (active === 'dashboard') return <DashboardPage />;
     if (active === 'tasks') return <TasksPage />;
     if (active === 'clients') return <ClientsPage />;
+    if (active === 'companies') return <CompaniesPage />;
     if (active === 'architecture') return <ArchitecturePage />;
     return modulePages[active];
   }, [active]);
