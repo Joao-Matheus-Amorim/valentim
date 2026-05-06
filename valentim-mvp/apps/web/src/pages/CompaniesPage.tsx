@@ -102,6 +102,26 @@ export function CompaniesPage() {
     setError(null);
   }
 
+  async function handleDeleteCompany(company: Company) {
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await deleteCompany(company.id);
+      setCompanies((current) => current.filter((item) => item.id !== company.id));
+      if (editingCompany?.id === company.id) {
+        setEditingCompany(null);
+        setCompanyForm(initialCompanyForm);
+      }
+      setSuccess('Empresa excluída com sucesso.');
+      window.setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Não foi possível excluir a empresa. Verifique se ela possui documentos, prazos ou cobranças vinculadas.');
+    } finally {
+      setDeletingCompanyId(null);
+    }
+  }
+
   async function handleCompanyFormSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -295,9 +315,9 @@ export function CompaniesPage() {
                 {deletingCompanyId === company.id ? (
                   <div className="company-help-box">
                     <strong>Tem certeza que deseja excluir esta empresa?</strong>
-                    <span>Essa ação será aplicada somente depois da confirmação.</span>
+                    <span>Essa ação não poderá ser desfeita se a empresa não possuir vínculos ativos.</span>
                     <div className="company-form-actions">
-                      <button className="company-primary-button" type="button">
+                      <button className="company-primary-button" type="button" onClick={() => handleDeleteCompany(company)}>
                         Confirmar exclusão
                       </button>
                       <button className="company-secondary-button" type="button" onClick={cancelDeletingCompany}>
