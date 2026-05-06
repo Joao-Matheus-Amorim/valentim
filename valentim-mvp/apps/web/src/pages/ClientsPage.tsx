@@ -87,6 +87,11 @@ export function ClientsPage() {
       return;
     }
 
+    if (editingClient) {
+      setError('A edição será salva na próxima etapa da implementação.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -103,6 +108,10 @@ export function ClientsPage() {
       setSaving(false);
     }
   }
+
+  const formTitle = editingClient ? 'Editar cliente' : 'Cadastrar cliente';
+  const submitLabel = editingClient ? 'Salvar alterações' : 'Criar cliente';
+  const savingLabel = editingClient ? 'Salvando...' : 'Criando...';
 
   return (
     <div className="stack clients-page">
@@ -128,8 +137,11 @@ export function ClientsPage() {
       </div>
 
       <div className="grid two clients-workspace">
-        <Card title="Cadastrar cliente" color="green">
+        <Card title={formTitle} color={editingClient ? 'amber' : 'green'}>
           <form className="client-form" onSubmit={handleSubmit}>
+            {editingClient ? (
+              <p className="lead">Editando <strong>{editingClient.name}</strong>. Revise os dados antes de salvar.</p>
+            ) : null}
             <label>
               Nome
               <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex.: Padaria do João" />
@@ -138,7 +150,7 @@ export function ClientsPage() {
               Telefone WhatsApp
               <input value={form.phone || ''} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Ex.: 5521999999999" />
             </label>
-            <button className="client-primary-button" type="submit" disabled={saving}>{saving ? 'Criando...' : 'Criar cliente'}</button>
+            <button className="client-primary-button" type="submit" disabled={saving}>{saving ? savingLabel : submitLabel}</button>
           </form>
         </Card>
 
