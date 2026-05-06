@@ -10,6 +10,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U valentim -d valentim"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7
@@ -26,29 +31,42 @@ services:
       retries: 10
 
   evolution:
-    image: atendai/evolution-api:latest
+    image: atendai/evolution-api:v2.2.3
     container_name: valentim-evolution
     ports:
       - "8080:8080"
     environment:
       SERVER_URL: "http://localhost:8080"
       AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY:-valentim-secret}"
+
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: "postgresql"
-      DATABASE_CONNECTION_URI: "postgresql://valentim:valentim@postgres:5432/valentim"
+      # Não usar o schema public do Valentim. A Evolution tem 49 migrations próprias.
+      DATABASE_CONNECTION_URI: "postgresql://valentim:valentim@postgres:5432/valentim?schema=evolution"
+      DATABASE_CONNECTION_CLIENT_NAME: "valentim-evolution"
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: "redis://redis:6379/6"
       CACHE_REDIS_PREFIX_KEY: "valentim:evolution"
-      CACHE_REDIS_SAVE_INSTANCES: "false"
-      REDIS_ENABLED: "true"
-      REDIS_URI: "redis://redis:6379/6"
+      CACHE_REDIS_SAVE_INSTANCES: "true"
+
       QRCODE_LIMIT: "30"
       QRCODE_COLOR: "#198754"
+
+      LOG_LEVEL: "ERROR,WARN,INFO,LOG"
+      DEL_INSTANCE: "false"
+      WEBSOCKET_ENABLED: "true"
+      WEBSOCKET_GLOBAL_EVENTS: "true"
     depends_on:
       redis:
         condition: service_healthy
       postgres:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:
