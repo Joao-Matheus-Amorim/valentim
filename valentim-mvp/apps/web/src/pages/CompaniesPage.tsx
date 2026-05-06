@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listClients } from '../services/clients';
@@ -68,6 +68,11 @@ export function CompaniesPage() {
     };
   }, [companies]);
 
+  function handleCompanyFormSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError('A criação de empresa será ativada na próxima etapa da implementação.');
+  }
+
   return (
     <div className="stack companies-page">
       <div className="page-title companies-title">
@@ -88,6 +93,61 @@ export function CompaniesPage() {
         <Card color="green" title="Com CNPJ"><div className="metric">{metrics.withCnpj}</div><p>Empresas com CNPJ informado.</p></Card>
         <Card color="amber" title="Documentos"><div className="metric">{metrics.documents}</div><p>Solicitações vinculadas às empresas.</p></Card>
         <Card color="violet" title="Clientes"><div className="metric">{metrics.clients}</div><p>Clientes com empresas vinculadas.</p></Card>
+      </div>
+
+      <div className="grid two companies-workspace">
+        <Card title="Cadastrar empresa" color="sky">
+          <form className="company-form" onSubmit={handleCompanyFormSubmit}>
+            <label>
+              Cliente responsável
+              <select
+                value={companyForm.clientId}
+                onChange={(event) => setCompanyForm({ ...companyForm, clientId: event.target.value })}
+                disabled={loading || clients.length === 0}
+              >
+                <option value="">Selecione um cliente</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nome da empresa
+              <input
+                value={companyForm.name}
+                onChange={(event) => setCompanyForm({ ...companyForm, name: event.target.value })}
+                placeholder="Ex.: Padaria do João LTDA"
+              />
+            </label>
+            <label>
+              CNPJ
+              <input
+                value={companyForm.cnpj || ''}
+                onChange={(event) => setCompanyForm({ ...companyForm, cnpj: event.target.value })}
+                placeholder="Ex.: 00.000.000/0001-00"
+              />
+            </label>
+            <label>
+              Regime tributário
+              <input
+                value={companyForm.regime || ''}
+                onChange={(event) => setCompanyForm({ ...companyForm, regime: event.target.value })}
+                placeholder="Ex.: Simples Nacional"
+              />
+            </label>
+            <button className="company-primary-button" type="submit" disabled={loading || clients.length === 0}>
+              Criar empresa
+            </button>
+          </form>
+        </Card>
+
+        <Card title="Como usar" color="slate">
+          <div className="company-help-box">
+            <strong>Empresa sempre pertence a um cliente.</strong>
+            <span>Cadastre primeiro o cliente na aba Clientes. Depois vincule uma ou mais empresas a ele.</span>
+            <span>Os documentos, prazos e cobranças serão organizados por empresa.</span>
+          </div>
+        </Card>
       </div>
 
       <Card title="Carteira de empresas" color="slate">
