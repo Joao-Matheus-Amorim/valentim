@@ -14,9 +14,26 @@ import dashboardRoutes from './routes/dashboard.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import tasksRoutes from './routes/tasks.routes';
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://valentim-swart.vercel.app'
+];
+
 export function buildApp() {
   const app = Fastify({ logger: true });
-  app.register(cors, { origin: true });
+
+  app.register(cors, {
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Origin not allowed by CORS'), false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-webhook-secret']
+  });
 
   app.get('/health', async () => {
     try {
