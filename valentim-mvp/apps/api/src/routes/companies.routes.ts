@@ -36,7 +36,15 @@ const companiesRoutes: FastifyPluginAsync = async (app) => {
     const data = request.body as any;
     const existing = await prisma.company.findFirst({ where: { id, client: { officeId } } });
     if (!existing) return reply.code(404).send({ error: 'Company not found' });
-    return prisma.company.update({ where: { id }, data });
+
+    return prisma.company.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name ?? existing.name,
+        cnpj: data.cnpj !== undefined ? data.cnpj : existing.cnpj,
+        regime: data.regime !== undefined ? data.regime : existing.regime
+      }
+    });
   });
 
   app.delete('/api/companies/:id', { preHandler: authMiddleware }, async (request, reply) => {

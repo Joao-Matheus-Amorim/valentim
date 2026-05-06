@@ -26,6 +26,47 @@ const includeRelations = {
   assignedTo: { select: { id: true, name: true, email: true, role: true } }
 };
 
+type TaskRelationInput = {
+  clientId?: string | null;
+  companyId?: string | null;
+  documentRequestId?: string | null;
+  assignedToId?: string | null;
+};
+
+async function validateTaskRelations(officeId: string, relations: TaskRelationInput) {
+  const [client, company, documentRequest, assignedTo] = await Promise.all([
+    relations.clientId
+      ? prisma.client.findFirst({ where: { id: relations.clientId, officeId } })
+      : Promise.resolve(null),
+    relations.companyId
+      ? prisma.company.findFirst({ where: { id: relations.companyId, client: { officeId } } })
+      : Promise.resolve(null),
+    relations.documentRequestId
+      ? prisma.documentRequest.findFirst({
+          where: { id: relations.documentRequestId, company: { client: { officeId } } }
+        })
+      : Promise.resolve(null),
+    relations.assignedToId
+      ? prisma.user.findFirst({ where: { id: relations.assignedToId, officeId } })
+      : Promise.resolve(null)
+  ]);
+
+  if (relations.clientId && !client) return { ok: false, error: 'Invalid client' };
+  if (relations.companyId && !company) return { ok: false, error: 'Invalid company' };
+  if (relations.documentRequestId && !documentRequest) return { ok: false, error: 'Invalid document request' };
+  if (relations.assignedToId && !assignedTo) return { ok: false, error: 'Invalid assignee' };
+
+  if (client && company && company.clientId !== client.id) {
+    return { ok: false, error: 'Company does not belong to client' };
+  }
+
+  if (company && documentRequest && documentRequest.companyId !== company.id) {
+    return { ok: false, error: 'Document request does not belong to company' };
+  }
+
+  return { ok: true, error: null };
+}
+
 const tasksRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/tasks', { preHandler: authMiddleware }, async (request) => {
     const { officeId } = request.user;
@@ -61,6 +102,18 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
     if (!data?.title || typeof data.title !== 'string') {
       return reply.code(400).send({ error: 'Task title is required' });
     }
+
+    const relationValidation = await validateTaskRelations(officeId, {
+      clientId: data.clientId ?? null,
+      companyId: data.companyId ?? null,
+      documentRequestId: data.documentRequestId ?? null,
+      assignedToId: data.assignedToId ?? null
+    });
+
+    if (!relationValidation.ok) {
+      return reply.code(400).send({ error: relationValidation.error });
+    }
+
     return prisma.task.create({
       data: {
         officeId,
@@ -87,20 +140,33 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
     const existing = await prisma.task.findFirst({ where: { id, officeId } });
     if (!existing) return reply.code(404).send({ error: 'Task not found' });
 
+    const nextRelations = {
+      clientId: data.clientId !== undefined ? data.clientId : existing.clientId,
+      companyId: data.companyId !== undefined ? data.companyId : existing.companyId,
+      documentRequestId: data.documentRequestId !== undefined ? data.documentRequestId : existing.documentRequestId,
+      assignedToId: data.assignedToId !== undefined ? data.assignedToId : existing.assignedToId
+    };
+
+    const relationValidation = await validateTaskRelations(officeId, nextRelations);
+
+    if (!relationValidation.ok) {
+      return reply.code(400).send({ error: relationValidation.error });
+    }
+
     const nextStatus = data.status ? normalizeStatus(data.status) : existing.status;
     const nextPriority = data.priority ? normalizePriority(data.priority) : existing.priority;
     const completedAt =
       nextStatus === 'DONE' && existing.status !== 'DONE' ? new Date() : existing.completedAt;
 
     return prisma.task.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         title: data.title ?? existing.title,
         description: data.description ?? existing.description,
-        clientId: data.clientId ?? existing.clientId,
-        companyId: data.companyId ?? existing.companyId,
-        documentRequestId: data.documentRequestId ?? existing.documentRequestId,
-        assignedToId: data.assignedToId ?? existing.assignedToId,
+        clientId: nextRelations.clientId,
+        companyId: nextRelations.companyId,
+        documentRequestId: nextRelations.documentRequestId,
+        assignedToId: nextRelations.assignedToId,
         status: nextStatus as any,
         priority: nextPriority as any,
         source: data.source ?? existing.source,

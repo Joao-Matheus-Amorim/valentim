@@ -2,8 +2,10 @@ import axios from 'axios';
 
 export const AUTH_TOKEN_KEY = 'valentim.auth.token';
 
+const apiBaseURL = import.meta.env.VITE_API_URL || '/api';
+
 export const api = axios.create({
-  baseURL: '/api'
+  baseURL: apiBaseURL
 });
 
 export function getStoredToken() {

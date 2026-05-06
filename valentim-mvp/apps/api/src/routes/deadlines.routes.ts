@@ -31,7 +31,15 @@ const deadlinesRoutes: FastifyPluginAsync = async (app) => {
       where: { id, company: { client: { officeId } } }
     });
     if (!existing) return reply.code(404).send({ error: 'Deadline not found' });
-    const updated = await prisma.deadline.update({ where: { id }, data });
+
+    const updated = await prisma.deadline.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name ?? existing.name,
+        dueDate: data.dueDate ? new Date(data.dueDate) : existing.dueDate,
+        status: data.status ?? existing.status
+      }
+    });
     return updated;
   });
 

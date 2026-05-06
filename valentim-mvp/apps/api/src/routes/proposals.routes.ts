@@ -31,7 +31,16 @@ const proposalsRoutes: FastifyPluginAsync = async (app) => {
       where: { id, client: { officeId } }
     });
     if (!existing) return reply.code(404).send({ error: 'Proposal not found' });
-    const updated = await prisma.proposal.update({ where: { id }, data });
+
+    const updated = await prisma.proposal.update({
+      where: { id: existing.id },
+      data: {
+        title: data.title ?? existing.title,
+        description: data.description ?? existing.description,
+        value: data.value ?? existing.value,
+        status: data.status ?? existing.status
+      }
+    });
     return updated;
   });
 
