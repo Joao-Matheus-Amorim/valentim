@@ -31,7 +31,16 @@ const financeRoutes: FastifyPluginAsync = async (app) => {
       where: { id, company: { client: { officeId } } }
     });
     if (!existing) return reply.code(404).send({ error: 'Charge not found' });
-    const updated = await prisma.charge.update({ where: { id }, data });
+
+    const updated = await prisma.charge.update({
+      where: { id: existing.id },
+      data: {
+        description: data.description ?? existing.description,
+        amount: data.amount ?? existing.amount,
+        dueDate: data.dueDate ? new Date(data.dueDate) : existing.dueDate,
+        status: data.status ?? existing.status
+      }
+    });
     return updated;
   });
 
