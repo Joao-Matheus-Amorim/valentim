@@ -2,12 +2,24 @@ import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 
+const documentInclude = {
+  company: true,
+  files: true,
+  reviewedBy: {
+    select: {
+      id: true,
+      name: true,
+      email: true
+    }
+  }
+};
+
 const documentsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/documents', { preHandler: authMiddleware }, async (request, reply) => {
     const { officeId } = (request as any).user;
     const documents = await prisma.documentRequest.findMany({
       where: { company: { client: { officeId } } },
-      include: { company: true, files: true }
+      include: documentInclude
     });
     return documents;
   });
@@ -28,7 +40,7 @@ const documentsRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as any;
     const doc = await prisma.documentRequest.findFirst({
       where: { id, company: { client: { officeId } } },
-      include: { files: true, aiAnalyses: true, unmatchedDocuments: true }
+      include: { ...documentInclude, aiAnalyses: true, unmatchedDocuments: true }
     });
     if (!doc) return reply.code(404).send({ error: 'Not found' });
     return doc;
