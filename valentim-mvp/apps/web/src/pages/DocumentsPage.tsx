@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listCompanies } from '../services/companies';
-import { createDocument, listDocuments } from '../services/documents';
+import { createDocument, listDocuments, reviewDocument } from '../services/documents';
 import type { Company } from '../types/company';
 import type { CreateDocumentInput, DocumentRequest, DocumentStatus } from '../types/document';
 import './DocumentsPage.css';
@@ -116,6 +116,23 @@ export function DocumentsPage() {
       setError('Não foi possível criar a solicitação. Verifique os dados e tente novamente.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleReviewDocument(documentId: string, action: 'approve' | 'reject') {
+    setReviewingDocumentId(documentId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await reviewDocument(documentId, { action });
+      setSuccess(action === 'approve' ? 'Documento aprovado com sucesso.' : 'Documento rejeitado com sucesso.');
+      window.setTimeout(() => setSuccess(null), 3000);
+      await loadDocuments();
+    } catch (err) {
+      setError('Não foi possível revisar o documento. Verifique API/token e tente novamente.');
+    } finally {
+      setReviewingDocumentId(null);
     }
   }
 
@@ -236,11 +253,21 @@ export function DocumentsPage() {
                     <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
                     {canReviewDocument(document.status) ? (
                       <>
-                        <button className="document-secondary-button" type="button" disabled={reviewingDocumentId === document.id}>
-                          Aprovar
+                        <button
+                          className="document-secondary-button"
+                          type="button"
+                          disabled={reviewingDocumentId === document.id}
+                          onClick={() => handleReviewDocument(document.id, 'approve')}
+                        >
+                          {reviewingDocumentId === document.id ? 'Processando...' : 'Aprovar'}
                         </button>
-                        <button className="document-secondary-button" type="button" disabled={reviewingDocumentId === document.id}>
-                          Rejeitar
+                        <button
+                          className="document-secondary-button"
+                          type="button"
+                          disabled={reviewingDocumentId === document.id}
+                          onClick={() => handleReviewDocument(document.id, 'reject')}
+                        >
+                          {reviewingDocumentId === document.id ? 'Processando...' : 'Rejeitar'}
                         </button>
                       </>
                     ) : null}
