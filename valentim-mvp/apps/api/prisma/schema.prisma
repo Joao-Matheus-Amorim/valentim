@@ -76,17 +76,18 @@ model Office {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  officeId      String
-  office        Office   @relation(fields: [officeId], references: [id])
-  role          UserRole
-  name          String
-  email         String   @unique
-  password      String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String            @id @default(uuid())
+  officeId          String
+  office            Office            @relation(fields: [officeId], references: [id])
+  role              UserRole
+  name              String
+  email             String            @unique
+  password          String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  assignedTasks Task[]   @relation("TaskAssignee")
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  reviewedDocuments DocumentRequest[] @relation("DocumentReviewer")
 }
 
 model Client {
@@ -130,6 +131,10 @@ model DocumentRequest {
   competence         String?
   dueDate            DateTime?
   status             DocumentStatus      @default(PENDING)
+  rejectionReason    String?
+  reviewedAt         DateTime?
+  reviewedById       String?
+  reviewedBy         User?               @relation("DocumentReviewer", fields: [reviewedById], references: [id])
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -137,6 +142,8 @@ model DocumentRequest {
   aiAnalyses         AIAnalysis[]
   unmatchedDocuments UnmatchedDocument[]
   tasks              Task[]
+
+  @@index([reviewedById])
 }
 
 model DocumentFile {
