@@ -10,6 +10,25 @@ function buildDueDate() {
   return date;
 }
 
+async function closeOpenReuploadTasks(input: {
+  officeId: string;
+  documentRequestId: string;
+  completedAt: Date;
+}) {
+  return prisma.task.updateMany({
+    where: {
+      officeId: input.officeId,
+      documentRequestId: input.documentRequestId,
+      source: REUPLOAD_TASK_SOURCE,
+      status: { notIn: ['DONE', 'CANCELED'] }
+    },
+    data: {
+      status: 'DONE',
+      completedAt: input.completedAt
+    }
+  });
+}
+
 async function createOrUpdateReuploadTask(input: {
   officeId: string;
   clientId: string;
@@ -43,7 +62,8 @@ async function createOrUpdateReuploadTask(input: {
     status: 'WAITING_CLIENT' as const,
     priority: 'HIGH' as const,
     source: REUPLOAD_TASK_SOURCE,
-    dueDate: buildDueDate()
+    dueDate: buildDueDate(),
+    completedAt: null
   };
 
   if (existing) {
@@ -94,11 +114,18 @@ const reviewRoutes: FastifyPluginAsync = async (app) => {
         }
       });
 
+      const closedTasks = await closeOpenReuploadTasks({
+        officeId,
+        documentRequestId: doc.id,
+        completedAt: reviewedAt
+      });
+
       return {
         status: updated.status,
         rejectionReason: updated.rejectionReason,
         reviewedAt: updated.reviewedAt,
-        reviewedById: updated.reviewedById
+        reviewedById: updated.reviewedById,
+        closedReuploadTasks: closedTasks.count
       };
     }
 
