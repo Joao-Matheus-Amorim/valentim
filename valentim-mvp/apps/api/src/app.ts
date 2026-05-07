@@ -5,6 +5,7 @@ import { prisma } from './lib/prisma';
 import authRoutes from './routes/auth.routes';
 import clientsRoutes from './routes/clients.routes';
 import companiesRoutes from './routes/companies.routes';
+import peopleRoutes from './routes/people.routes';
 import documentsRoutes from './routes/documents.routes';
 import reviewRoutes from './routes/document-review.routes';
 import deadlinesRoutes from './routes/deadlines.routes';
@@ -48,6 +49,7 @@ export function buildApp() {
   app.register(dashboardRoutes);
   app.register(clientsRoutes);
   app.register(companiesRoutes);
+  app.register(peopleRoutes);
   app.register(documentsRoutes);
   app.register(reviewRoutes);
   app.register(deadlinesRoutes);
