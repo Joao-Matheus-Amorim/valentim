@@ -83,6 +83,13 @@ function formatDate(date?: string | null) {
   return new Date(date).toLocaleDateString('pt-BR');
 }
 
+function formatDateTime(date?: string | null) {
+  if (!date) return null;
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return null;
+  return value.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 function getDocumentDueDateSignal(document: DocumentRequest): DocumentDueDateSignal {
   if (document.status === 'APPROVED') {
     return { label: 'Conferido', color: 'green' };
@@ -136,6 +143,14 @@ function getApproveButtonLabel(document: DocumentRequest, isReviewing: boolean) 
   return 'Aprovar';
 }
 
+function getReviewHistoryLabel(document: DocumentRequest) {
+  const reviewedAt = formatDateTime(document.reviewedAt);
+  if (!reviewedAt) return null;
+  if (document.status === 'APPROVED') return `Aprovado em ${reviewedAt}`;
+  if (document.status === 'REJECTED') return `Rejeitado em ${reviewedAt}`;
+  return `Revisado em ${reviewedAt}`;
+}
+
 function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter) {
   if (filter === 'all') return true;
   if (filter === 'pending') return document.status === 'PENDING' || document.status === 'OVERDUE';
@@ -160,6 +175,7 @@ function matchesDocumentSearch(document: DocumentRequest, search: string) {
     document.dueDate ? formatDate(document.dueDate) : null,
     statusLabels[document.status],
     dueDateSignal.label,
+    getReviewHistoryLabel(document),
     document.rejectionReason
   ].map(normalizeSearchValue).join(' ');
 
@@ -630,6 +646,7 @@ export function DocumentsPage() {
             {filteredDocuments.map((document) => {
               const isReviewing = reviewingDocumentId === document.id;
               const dueDateSignal = getDocumentDueDateSignal(document);
+              const reviewHistoryLabel = getReviewHistoryLabel(document);
 
               return (
                 <article className="document-card" key={document.id}>
@@ -638,6 +655,9 @@ export function DocumentsPage() {
                       <strong>{document.documentType}</strong>
                       <span>Empresa: {document.company?.name || 'Empresa não informada'}</span>
                       <span>Competência: {document.competence || 'Não informada'} · Vencimento: {formatDate(document.dueDate)}</span>
+                      {reviewHistoryLabel ? (
+                        <span className="document-review-history">{reviewHistoryLabel}</span>
+                      ) : null}
                       {document.status === 'REJECTED' && document.rejectionReason ? (
                         <span>Motivo da rejeição: {document.rejectionReason}</span>
                       ) : null}
