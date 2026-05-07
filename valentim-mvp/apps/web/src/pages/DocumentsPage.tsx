@@ -23,6 +23,7 @@ type DocumentUrgencyFilter = 'dueToday' | 'nextSevenDays' | 'overdue' | 'rejecte
 
 const ALL_COMPANIES_FILTER = 'all';
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const BRASILIA_TIME_ZONE = 'America/Sao_Paulo';
 
 const documentFilterOptions: Array<{ id: DocumentFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
@@ -87,7 +88,11 @@ function formatDateTime(date?: string | null) {
   if (!date) return null;
   const value = new Date(date);
   if (Number.isNaN(value.getTime())) return null;
-  return value.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  return value.toLocaleString('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: BRASILIA_TIME_ZONE
+  });
 }
 
 function getDocumentDueDateSignal(document: DocumentRequest): DocumentDueDateSignal {
@@ -146,9 +151,9 @@ function getApproveButtonLabel(document: DocumentRequest, isReviewing: boolean) 
 function getReviewHistoryLabel(document: DocumentRequest) {
   const reviewedAt = formatDateTime(document.reviewedAt);
   if (!reviewedAt) return null;
-  if (document.status === 'APPROVED') return `Aprovado em ${reviewedAt}`;
-  if (document.status === 'REJECTED') return `Rejeitado em ${reviewedAt}`;
-  return `Revisado em ${reviewedAt}`;
+  if (document.status === 'APPROVED') return `Aprovado em ${reviewedAt} (Brasília)`;
+  if (document.status === 'REJECTED') return `Rejeitado em ${reviewedAt} (Brasília)`;
+  return `Revisado em ${reviewedAt} (Brasília)`;
 }
 
 function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter) {
