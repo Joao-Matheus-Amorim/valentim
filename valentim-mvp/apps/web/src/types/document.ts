@@ -16,6 +16,12 @@ export interface DocumentCompany {
   regime?: string | null;
 }
 
+export interface DocumentReviewer {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface DocumentFile {
   id: string;
   documentRequestId?: string | null;
@@ -63,6 +69,7 @@ export interface DocumentRequest {
   rejectionReason?: string | null;
   reviewedAt?: string | null;
   reviewedById?: string | null;
+  reviewedBy?: DocumentReviewer | null;
   createdAt?: string;
   updatedAt?: string;
   files?: DocumentFile[];
