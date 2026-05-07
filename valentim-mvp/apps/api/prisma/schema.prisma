@@ -23,6 +23,20 @@ enum DocumentStatus {
   OVERDUE
 }
 
+enum DocumentTargetType {
+  COMPANY
+  PERSON
+}
+
+enum PersonRole {
+  OWNER
+  PARTNER
+  LEGAL_REPRESENTATIVE
+  RESPONSIBLE
+  CONTACT
+  OTHER
+}
+
 enum ConversationStatus {
   IDLE
   WAITING_DOC
@@ -71,6 +85,7 @@ model Office {
 
   users            User[]
   clients          Client[]
+  people           Person[]
   whatsAppMessages WhatsAppMessage[]
   tasks            Task[]
 }
@@ -100,6 +115,7 @@ model Client {
   updatedAt          DateTime            @updatedAt
 
   companies          Company[]
+  people             Person[]
   whatsAppMessages   WhatsAppMessage[]
   conversationStates ConversationState[]
   proposals          Proposal[]
@@ -123,10 +139,35 @@ model Company {
   tasks            Task[]
 }
 
+model Person {
+  id               String            @id @default(uuid())
+  officeId         String
+  office           Office            @relation(fields: [officeId], references: [id])
+  clientId         String?
+  client           Client?           @relation(fields: [clientId], references: [id])
+  name             String
+  cpf              String?
+  email            String?
+  phone            String?
+  role             PersonRole        @default(OTHER)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  documentRequests DocumentRequest[]
+  tasks            Task[]
+
+  @@index([officeId])
+  @@index([clientId])
+  @@index([role])
+}
+
 model DocumentRequest {
   id                 String              @id @default(uuid())
   companyId          String
   company            Company             @relation(fields: [companyId], references: [id])
+  targetType         DocumentTargetType  @default(COMPANY)
+  personId           String?
+  person             Person?             @relation(fields: [personId], references: [id])
   documentType       String
   competence         String?
   dueDate            DateTime?
@@ -144,6 +185,8 @@ model DocumentRequest {
   tasks              Task[]
 
   @@index([reviewedById])
+  @@index([personId])
+  @@index([targetType])
 }
 
 model DocumentFile {
@@ -264,6 +307,9 @@ model Task {
   companyId         String?
   company           Company?         @relation(fields: [companyId], references: [id])
 
+  personId          String?
+  person            Person?          @relation(fields: [personId], references: [id])
+
   documentRequestId String?
   documentRequest   DocumentRequest? @relation(fields: [documentRequestId], references: [id])
 
@@ -287,4 +333,5 @@ model Task {
   @@index([dueDate])
   @@index([clientId])
   @@index([companyId])
+  @@index([personId])
 }
