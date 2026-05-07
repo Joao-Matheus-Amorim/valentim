@@ -16,6 +16,16 @@ const statusLabels: Record<DocumentStatus, string> = {
   OVERDUE: 'Atrasado'
 };
 
+type DocumentFilter = 'all' | 'pending' | 'sent' | 'approved' | 'rejected';
+
+const documentFilterOptions: Array<{ id: DocumentFilter; label: string }> = [
+  { id: 'all', label: 'Todos' },
+  { id: 'pending', label: 'Pendentes' },
+  { id: 'sent', label: 'Enviados' },
+  { id: 'approved', label: 'Aprovados' },
+  { id: 'rejected', label: 'Rejeitados / reenvio' }
+];
+
 const documentTypeOptions = ['DAS', 'DARF', 'NF', 'EXTRATO', 'FOLHA', 'OUTRO'];
 
 const initialDocumentForm: CreateDocumentInput = {
@@ -48,10 +58,19 @@ function getApproveButtonLabel(document: DocumentRequest, isReviewing: boolean) 
   return 'Aprovar';
 }
 
+function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'pending') return document.status === 'PENDING' || document.status === 'OVERDUE';
+  if (filter === 'sent') return document.status === 'SENT' || document.status === 'UNDER_REVIEW';
+  if (filter === 'approved') return document.status === 'APPROVED';
+  return document.status === 'REJECTED';
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
+  const [activeDocumentFilter, setActiveDocumentFilter] = useState<DocumentFilter>('all');
   const [reviewingDocumentId, setReviewingDocumentId] = useState<string | null>(null);
   const [rejectingDocument, setRejectingDocument] = useState<DocumentRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -92,6 +111,17 @@ export function DocumentsPage() {
       overdue: documents.filter((document) => document.status === 'OVERDUE').length
     };
   }, [documents]);
+
+  const filterCounts = useMemo(() => {
+    return documentFilterOptions.reduce<Record<DocumentFilter, number>>((acc, option) => {
+      acc[option.id] = documents.filter((document) => matchesDocumentFilter(document, option.id)).length;
+      return acc;
+    }, { all: 0, pending: 0, sent: 0, approved: 0, rejected: 0 });
+  }, [documents]);
+
+  const filteredDocuments = useMemo(() => {
+    return documents.filter((document) => matchesDocumentFilter(document, activeDocumentFilter));
+  }, [activeDocumentFilter, documents]);
 
   async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
@@ -182,6 +212,7 @@ export function DocumentsPage() {
       setSuccess('Documento rejeitado com motivo registrado.');
       setRejectingDocument(null);
       setRejectionReason('');
+      setActiveDocumentFilter('rejected');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -286,6 +317,24 @@ export function DocumentsPage() {
           </div>
         ) : null}
 
+        {!loading && documents.length > 0 ? (
+          <div className="document-tabs" role="tablist" aria-label="Filtros de documentos por status">
+            {documentFilterOptions.map((option) => (
+              <button
+                key={option.id}
+                className={activeDocumentFilter === option.id ? 'document-tab active' : 'document-tab'}
+                type="button"
+                onClick={() => setActiveDocumentFilter(option.id)}
+                role="tab"
+                aria-selected={activeDocumentFilter === option.id}
+              >
+                <span>{option.label}</span>
+                <strong>{filterCounts[option.id]}</strong>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {!loading && companies.length > 0 && documents.length === 0 ? (
           <div className="documents-empty">
             <strong>Nenhum documento encontrado.</strong>
@@ -293,9 +342,16 @@ export function DocumentsPage() {
           </div>
         ) : null}
 
-        {!loading && documents.length > 0 ? (
+        {!loading && documents.length > 0 && filteredDocuments.length === 0 ? (
+          <div className="documents-empty">
+            <strong>Nenhum documento nesta aba.</strong>
+            <span>Troque o filtro ou crie uma nova solicitação para movimentar a fila.</span>
+          </div>
+        ) : null}
+
+        {!loading && filteredDocuments.length > 0 ? (
           <div className="documents-list">
-            {documents.map((document) => {
+            {filteredDocuments.map((document) => {
               const isReviewing = reviewingDocumentId === document.id;
 
               return (
