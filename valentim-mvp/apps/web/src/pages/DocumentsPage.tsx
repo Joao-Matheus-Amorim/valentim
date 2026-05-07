@@ -37,6 +37,14 @@ const initialDocumentForm: CreateDocumentInput = {
   dueDate: ''
 };
 
+function normalizeSearchValue(value?: string | null) {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 function formatDate(date?: string | null) {
   if (!date) return 'Sem vencimento';
   return new Date(date).toLocaleDateString('pt-BR');
@@ -72,12 +80,29 @@ function matchesCompanyFilter(document: DocumentRequest, companyFilter: string) 
   return companyFilter === ALL_COMPANIES_FILTER || document.companyId === companyFilter;
 }
 
+function matchesDocumentSearch(document: DocumentRequest, search: string) {
+  const normalizedSearch = normalizeSearchValue(search);
+  if (!normalizedSearch) return true;
+
+  const searchableText = [
+    document.documentType,
+    document.company?.name,
+    document.competence,
+    document.dueDate ? formatDate(document.dueDate) : null,
+    statusLabels[document.status],
+    document.rejectionReason
+  ].map(normalizeSearchValue).join(' ');
+
+  return searchableText.includes(normalizedSearch);
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [activeDocumentFilter, setActiveDocumentFilter] = useState<DocumentFilter>('all');
   const [activeCompanyFilter, setActiveCompanyFilter] = useState<string>(ALL_COMPANIES_FILTER);
+  const [documentSearch, setDocumentSearch] = useState('');
   const [reviewingDocumentId, setReviewingDocumentId] = useState<string | null>(null);
   const [rejectingDocument, setRejectingDocument] = useState<DocumentRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -131,8 +156,10 @@ export function DocumentsPage() {
   }, [companyFilteredDocuments]);
 
   const filteredDocuments = useMemo(() => {
-    return companyFilteredDocuments.filter((document) => matchesDocumentFilter(document, activeDocumentFilter));
-  }, [activeDocumentFilter, companyFilteredDocuments]);
+    return companyFilteredDocuments
+      .filter((document) => matchesDocumentFilter(document, activeDocumentFilter))
+      .filter((document) => matchesDocumentSearch(document, documentSearch));
+  }, [activeDocumentFilter, companyFilteredDocuments, documentSearch]);
 
   async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
@@ -161,6 +188,7 @@ export function DocumentsPage() {
       setDocumentForm(initialDocumentForm);
       setActiveCompanyFilter(companyId);
       setActiveDocumentFilter('pending');
+      setDocumentSearch('');
       setSuccess('Solicitação criada com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
@@ -179,6 +207,7 @@ export function DocumentsPage() {
     try {
       await reviewDocument(documentId, { action: 'approve' });
       setActiveDocumentFilter('approved');
+      setDocumentSearch('');
       setSuccess('Documento aprovado com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
@@ -207,6 +236,7 @@ export function DocumentsPage() {
   function clearDocumentFilters() {
     setActiveCompanyFilter(ALL_COMPANIES_FILTER);
     setActiveDocumentFilter('all');
+    setDocumentSearch('');
   }
 
   async function handleRejectSubmit(event: FormEvent) {
@@ -233,6 +263,7 @@ export function DocumentsPage() {
       setRejectionReason('');
       setActiveCompanyFilter(rejectingDocument.companyId);
       setActiveDocumentFilter('rejected');
+      setDocumentSearch('');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -322,7 +353,7 @@ export function DocumentsPage() {
           <div className="document-help-box">
             <strong>Documento sempre pertence a uma empresa.</strong>
             <span>Crie solicitações mensais para acompanhar o que o cliente precisa enviar.</span>
-            <span>Use as abas e o filtro de empresa para organizar a fila operacional.</span>
+            <span>Use as abas, o filtro de empresa e a busca para organizar a fila operacional.</span>
           </div>
         </Card>
       </div>
@@ -348,6 +379,14 @@ export function DocumentsPage() {
                     <option key={company.id} value={company.id}>{company.name}</option>
                   ))}
                 </select>
+              </label>
+              <label>
+                Busca rápida
+                <input
+                  value={documentSearch}
+                  onChange={(event) => setDocumentSearch(event.target.value)}
+                  placeholder="Buscar por tipo, competência, empresa, status ou motivo"
+                />
               </label>
               <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>
                 Limpar filtros
@@ -382,7 +421,7 @@ export function DocumentsPage() {
         {!loading && documents.length > 0 && filteredDocuments.length === 0 ? (
           <div className="documents-empty">
             <strong>Nenhum documento neste filtro.</strong>
-            <span>Troque a empresa, mude a aba de status ou crie uma nova solicitação para movimentar a fila.</span>
+            <span>Troque a empresa, mude a aba de status, ajuste a busca ou crie uma nova solicitação para movimentar a fila.</span>
           </div>
         ) : null}
 
