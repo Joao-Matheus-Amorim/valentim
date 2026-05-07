@@ -111,11 +111,40 @@
   color: #e2e8f0;
 }
 
+.document-filter-panel {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.document-company-filter {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 0.7rem;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.document-company-filter label {
+  min-width: min(100%, 320px);
+  display: grid;
+  gap: 0.35rem;
+  color: #cbd5e1;
+  font-size: 0.76rem;
+}
+
+.document-company-filter select {
+  width: 100%;
+}
+
 .document-tabs {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 0.9rem;
   padding: 0.35rem;
   border: 1px solid rgba(100, 116, 139, 0.2);
   border-radius: 1rem;
@@ -281,6 +310,10 @@
   .documents-actions,
   .document-card-meta {
     justify-content: flex-start;
+  }
+
+  .document-company-filter {
+    display: grid;
   }
 
   .document-tabs {
