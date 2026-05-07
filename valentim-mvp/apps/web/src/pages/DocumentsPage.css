@@ -321,6 +321,16 @@
   font-size: 0.7rem;
 }
 
+.document-card-main span.document-review-history {
+  width: fit-content;
+  margin-top: 0.08rem;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.34);
+  color: #cbd5e1;
+}
+
 .document-card-meta {
   display: flex;
   flex-wrap: wrap;
