@@ -60,6 +60,9 @@ export interface DocumentRequest {
   competence?: string | null;
   dueDate?: string | null;
   status: DocumentStatus;
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
+  reviewedById?: string | null;
   createdAt?: string;
   updatedAt?: string;
   files?: DocumentFile[];
@@ -76,4 +79,5 @@ export interface CreateDocumentInput {
 
 export interface ReviewDocumentInput {
   action: DocumentReviewAction;
+  reason?: string;
 }
