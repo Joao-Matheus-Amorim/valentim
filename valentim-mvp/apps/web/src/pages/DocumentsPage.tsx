@@ -120,13 +120,22 @@ export function DocumentsPage() {
   }
 
   async function handleReviewDocument(documentId: string, action: 'approve' | 'reject') {
+    const reason = action === 'reject'
+      ? window.prompt('Informe o motivo da rejeição do documento:')?.trim()
+      : undefined;
+
+    if (action === 'reject' && !reason) {
+      setError('Informe o motivo para rejeitar o documento.');
+      return;
+    }
+
     setReviewingDocumentId(documentId);
     setError(null);
     setSuccess(null);
 
     try {
-      await reviewDocument(documentId, { action });
-      setSuccess(action === 'approve' ? 'Documento aprovado com sucesso.' : 'Documento rejeitado com sucesso.');
+      await reviewDocument(documentId, { action, reason });
+      setSuccess(action === 'approve' ? 'Documento aprovado com sucesso.' : 'Documento rejeitado com motivo registrado.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -247,6 +256,9 @@ export function DocumentsPage() {
                     <strong>{document.documentType}</strong>
                     <span>Empresa: {document.company?.name || 'Empresa não informada'}</span>
                     <span>Competência: {document.competence || 'Não informada'} · Vencimento: {formatDate(document.dueDate)}</span>
+                    {document.status === 'REJECTED' && document.rejectionReason ? (
+                      <span>Motivo da rejeição: {document.rejectionReason}</span>
+                    ) : null}
                   </div>
                   <div className="document-card-meta">
                     <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
