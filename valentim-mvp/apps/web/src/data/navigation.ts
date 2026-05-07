@@ -6,6 +6,7 @@ export const navigationItems: NavItem[] = [
   { id: 'architecture', label: 'Arquitetura', icon: '⬡' },
   { id: 'clients', label: 'Clientes', icon: '◔' },
   { id: 'companies', label: 'Empresas', icon: '▦' },
+  { id: 'people', label: 'Pessoas', icon: '◌' },
   { id: 'documents', label: 'Documentos', icon: '▤' },
   { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
   { id: 'review', label: 'Triagem IA', icon: '◈' },
