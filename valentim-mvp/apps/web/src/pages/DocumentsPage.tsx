@@ -148,12 +148,20 @@ function getApproveButtonLabel(document: DocumentRequest, isReviewing: boolean) 
   return 'Aprovar';
 }
 
+function getReviewerName(document: DocumentRequest) {
+  return document.reviewedBy?.name || document.reviewedBy?.email || null;
+}
+
 function getReviewHistoryLabel(document: DocumentRequest) {
   const reviewedAt = formatDateTime(document.reviewedAt);
   if (!reviewedAt) return null;
-  if (document.status === 'APPROVED') return `Aprovado em ${reviewedAt} (Brasília)`;
-  if (document.status === 'REJECTED') return `Rejeitado em ${reviewedAt} (Brasília)`;
-  return `Revisado em ${reviewedAt} (Brasília)`;
+
+  const reviewerName = getReviewerName(document);
+  const reviewerSuffix = reviewerName ? ` por ${reviewerName}` : '';
+
+  if (document.status === 'APPROVED') return `Aprovado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
+  if (document.status === 'REJECTED') return `Rejeitado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
+  return `Revisado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
 }
 
 function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter) {
