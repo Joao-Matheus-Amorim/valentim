@@ -17,6 +17,7 @@ const statusLabels: Record<DocumentStatus, string> = {
 };
 
 type DocumentFilter = 'all' | 'pending' | 'sent' | 'approved' | 'rejected';
+type DocumentSort = 'dueDateAsc' | 'newest' | 'oldest' | 'typeAsc';
 
 const ALL_COMPANIES_FILTER = 'all';
 
@@ -26,6 +27,13 @@ const documentFilterOptions: Array<{ id: DocumentFilter; label: string }> = [
   { id: 'sent', label: 'Enviados' },
   { id: 'approved', label: 'Aprovados' },
   { id: 'rejected', label: 'Rejeitados / reenvio' }
+];
+
+const documentSortOptions: Array<{ id: DocumentSort; label: string }> = [
+  { id: 'dueDateAsc', label: 'Vencimento mais próximo' },
+  { id: 'newest', label: 'Mais recentes' },
+  { id: 'oldest', label: 'Mais antigos' },
+  { id: 'typeAsc', label: 'Tipo A-Z' }
 ];
 
 const documentTypeOptions = ['DAS', 'DARF', 'NF', 'EXTRATO', 'FOLHA', 'OUTRO'];
@@ -43,6 +51,12 @@ function normalizeSearchValue(value?: string | null) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
+}
+
+function getTimeValue(date?: string | null, fallback = Number.MAX_SAFE_INTEGER) {
+  if (!date) return fallback;
+  const timestamp = new Date(date).getTime();
+  return Number.isNaN(timestamp) ? fallback : timestamp;
 }
 
 function formatDate(date?: string | null) {
@@ -96,6 +110,26 @@ function matchesDocumentSearch(document: DocumentRequest, search: string) {
   return searchableText.includes(normalizedSearch);
 }
 
+function sortDocuments(documents: DocumentRequest[], sort: DocumentSort) {
+  return [...documents].sort((a, b) => {
+    if (sort === 'newest') {
+      return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
+    }
+
+    if (sort === 'oldest') {
+      return getTimeValue(a.createdAt, 0) - getTimeValue(b.createdAt, 0);
+    }
+
+    if (sort === 'typeAsc') {
+      return a.documentType.localeCompare(b.documentType, 'pt-BR');
+    }
+
+    const dueDateDiff = getTimeValue(a.dueDate) - getTimeValue(b.dueDate);
+    if (dueDateDiff !== 0) return dueDateDiff;
+    return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
+  });
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -103,6 +137,7 @@ export function DocumentsPage() {
   const [activeDocumentFilter, setActiveDocumentFilter] = useState<DocumentFilter>('all');
   const [activeCompanyFilter, setActiveCompanyFilter] = useState<string>(ALL_COMPANIES_FILTER);
   const [documentSearch, setDocumentSearch] = useState('');
+  const [documentSort, setDocumentSort] = useState<DocumentSort>('dueDateAsc');
   const [reviewingDocumentId, setReviewingDocumentId] = useState<string | null>(null);
   const [rejectingDocument, setRejectingDocument] = useState<DocumentRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -156,10 +191,12 @@ export function DocumentsPage() {
   }, [companyFilteredDocuments]);
 
   const filteredDocuments = useMemo(() => {
-    return companyFilteredDocuments
+    const result = companyFilteredDocuments
       .filter((document) => matchesDocumentFilter(document, activeDocumentFilter))
       .filter((document) => matchesDocumentSearch(document, documentSearch));
-  }, [activeDocumentFilter, companyFilteredDocuments, documentSearch]);
+
+    return sortDocuments(result, documentSort);
+  }, [activeDocumentFilter, companyFilteredDocuments, documentSearch, documentSort]);
 
   async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
@@ -189,6 +226,7 @@ export function DocumentsPage() {
       setActiveCompanyFilter(companyId);
       setActiveDocumentFilter('pending');
       setDocumentSearch('');
+      setDocumentSort('dueDateAsc');
       setSuccess('Solicitação criada com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
@@ -237,6 +275,7 @@ export function DocumentsPage() {
     setActiveCompanyFilter(ALL_COMPANIES_FILTER);
     setActiveDocumentFilter('all');
     setDocumentSearch('');
+    setDocumentSort('dueDateAsc');
   }
 
   async function handleRejectSubmit(event: FormEvent) {
@@ -264,6 +303,7 @@ export function DocumentsPage() {
       setActiveCompanyFilter(rejectingDocument.companyId);
       setActiveDocumentFilter('rejected');
       setDocumentSearch('');
+      setDocumentSort('newest');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -353,7 +393,7 @@ export function DocumentsPage() {
           <div className="document-help-box">
             <strong>Documento sempre pertence a uma empresa.</strong>
             <span>Crie solicitações mensais para acompanhar o que o cliente precisa enviar.</span>
-            <span>Use as abas, o filtro de empresa e a busca para organizar a fila operacional.</span>
+            <span>Use as abas, o filtro de empresa, a busca e a ordenação para organizar a fila operacional.</span>
           </div>
         </Card>
       </div>
@@ -387,6 +427,14 @@ export function DocumentsPage() {
                   onChange={(event) => setDocumentSearch(event.target.value)}
                   placeholder="Buscar por tipo, competência, empresa, status ou motivo"
                 />
+              </label>
+              <label>
+                Ordenar por
+                <select value={documentSort} onChange={(event) => setDocumentSort(event.target.value as DocumentSort)}>
+                  {documentSortOptions.map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
               </label>
               <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>
                 Limpar filtros
