@@ -13,7 +13,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
-    "prisma:seed:tasks": "ts-node --transpile-only prisma/seed-tasks.ts"
+    "prisma:seed:tasks": "ts-node --transpile-only prisma/seed-tasks.ts",
+    "db:doctor": "ts-node --transpile-only prisma/db-doctor.ts",
+    "db:repair:document-review": "ts-node --transpile-only prisma/repair-document-review-metadata.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.810.0",
