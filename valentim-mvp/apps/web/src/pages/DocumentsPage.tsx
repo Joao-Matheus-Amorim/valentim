@@ -19,6 +19,7 @@ const statusLabels: Record<DocumentStatus, string> = {
 type DocumentFilter = 'all' | 'pending' | 'sent' | 'approved' | 'rejected';
 type DocumentSort = 'dueDateAsc' | 'newest' | 'oldest' | 'typeAsc';
 type DocumentDueDateSignal = { label: string; color: 'slate' | 'green' | 'amber' | 'rose' };
+type DocumentUrgencyFilter = 'dueToday' | 'nextSevenDays' | 'overdue' | 'rejected';
 
 const ALL_COMPANIES_FILTER = 'all';
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -67,6 +68,16 @@ function getStartOfDay(date: Date) {
   return normalized;
 }
 
+function getDueDateDiffDays(date?: string | null) {
+  if (!date) return null;
+  const timestamp = new Date(date).getTime();
+  if (Number.isNaN(timestamp)) return null;
+
+  const today = getStartOfDay(new Date());
+  const dueDate = getStartOfDay(new Date(date));
+  return Math.round((dueDate.getTime() - today.getTime()) / DAY_IN_MS);
+}
+
 function formatDate(date?: string | null) {
   if (!date) return 'Sem vencimento';
   return new Date(date).toLocaleDateString('pt-BR');
@@ -81,13 +92,11 @@ function getDocumentDueDateSignal(document: DocumentRequest): DocumentDueDateSig
     return { label: 'Aguardando reenvio', color: 'rose' };
   }
 
-  if (!document.dueDate) {
+  const diffDays = getDueDateDiffDays(document.dueDate);
+
+  if (diffDays === null) {
     return { label: 'Sem vencimento', color: 'slate' };
   }
-
-  const today = getStartOfDay(new Date());
-  const dueDate = getStartOfDay(new Date(document.dueDate));
-  const diffDays = Math.round((dueDate.getTime() - today.getTime()) / DAY_IN_MS);
 
   if (diffDays < 0) {
     const daysLate = Math.abs(diffDays);
@@ -181,6 +190,28 @@ function getFilterLabel(options: Array<{ id: string; label: string }>, id: strin
   return options.find((option) => option.id === id)?.label || 'Todos';
 }
 
+function isActionableDocument(document: DocumentRequest) {
+  return document.status !== 'APPROVED';
+}
+
+function countDueToday(documents: DocumentRequest[]) {
+  return documents.filter((document) => isActionableDocument(document) && getDueDateDiffDays(document.dueDate) === 0).length;
+}
+
+function countNextSevenDays(documents: DocumentRequest[]) {
+  return documents.filter((document) => {
+    const diffDays = getDueDateDiffDays(document.dueDate);
+    return isActionableDocument(document) && diffDays !== null && diffDays > 0 && diffDays <= 7;
+  }).length;
+}
+
+function countOverdue(documents: DocumentRequest[]) {
+  return documents.filter((document) => {
+    const diffDays = getDueDateDiffDays(document.dueDate);
+    return isActionableDocument(document) && (document.status === 'OVERDUE' || (diffDays !== null && diffDays < 0));
+  }).length;
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -239,6 +270,15 @@ export function DocumentsPage() {
     return documents.filter((document) => matchesCompanyFilter(document, activeCompanyFilter));
   }, [activeCompanyFilter, documents]);
 
+  const urgencyMetrics = useMemo(() => {
+    return {
+      dueToday: countDueToday(companyFilteredDocuments),
+      nextSevenDays: countNextSevenDays(companyFilteredDocuments),
+      overdue: countOverdue(companyFilteredDocuments),
+      rejected: companyFilteredDocuments.filter((document) => document.status === 'REJECTED').length
+    };
+  }, [companyFilteredDocuments]);
+
   const filterCounts = useMemo(() => {
     return documentFilterOptions.reduce<Record<DocumentFilter, number>>((acc, option) => {
       acc[option.id] = companyFilteredDocuments.filter((document) => matchesDocumentFilter(document, option.id)).length;
@@ -253,6 +293,31 @@ export function DocumentsPage() {
 
     return sortDocuments(result, documentSort);
   }, [activeDocumentFilter, companyFilteredDocuments, documentSearch, documentSort]);
+
+  function applyUrgencyFilter(filter: DocumentUrgencyFilter) {
+    setDocumentSearch('');
+    setDocumentSort(filter === 'rejected' ? 'newest' : 'dueDateAsc');
+
+    if (filter === 'rejected') {
+      setActiveDocumentFilter('rejected');
+      return;
+    }
+
+    if (filter === 'overdue') {
+      setActiveDocumentFilter('pending');
+      setDocumentSearch('atrasado');
+      return;
+    }
+
+    if (filter === 'dueToday') {
+      setActiveDocumentFilter('all');
+      setDocumentSearch('vence hoje');
+      return;
+    }
+
+    setActiveDocumentFilter('all');
+    setDocumentSearch('vence em');
+  }
 
   async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
@@ -390,6 +455,29 @@ export function DocumentsPage() {
         <Card color="sky" title="Pendentes"><div className="metric">{metrics.pending}</div><p>Aguardando envio do cliente.</p></Card>
         <Card color="green" title="Aprovados"><div className="metric">{metrics.approved}</div><p>Documentos conferidos.</p></Card>
         <Card color="rose" title="Atrasados"><div className="metric">{metrics.overdue}</div><p>Itens fora do prazo.</p></Card>
+      </div>
+
+      <div className="document-urgency-grid">
+        <button className="document-urgency-card amber" type="button" onClick={() => applyUrgencyFilter('dueToday')}>
+          <span>Vencem hoje</span>
+          <strong>{urgencyMetrics.dueToday}</strong>
+          <small>Prioridade imediata</small>
+        </button>
+        <button className="document-urgency-card amber" type="button" onClick={() => applyUrgencyFilter('nextSevenDays')}>
+          <span>Próximos 7 dias</span>
+          <strong>{urgencyMetrics.nextSevenDays}</strong>
+          <small>Planejar cobrança</small>
+        </button>
+        <button className="document-urgency-card rose" type="button" onClick={() => applyUrgencyFilter('overdue')}>
+          <span>Atrasados</span>
+          <strong>{urgencyMetrics.overdue}</strong>
+          <small>Exige ação</small>
+        </button>
+        <button className="document-urgency-card rose" type="button" onClick={() => applyUrgencyFilter('rejected')}>
+          <span>Aguardando reenvio</span>
+          <strong>{urgencyMetrics.rejected}</strong>
+          <small>Cliente precisa corrigir</small>
+        </button>
       </div>
 
       <div className="grid two documents-workspace">
