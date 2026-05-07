@@ -177,6 +177,10 @@ function sortDocuments(documents: DocumentRequest[], sort: DocumentSort) {
   });
 }
 
+function getFilterLabel(options: Array<{ id: string; label: string }>, id: string) {
+  return options.find((option) => option.id === id)?.label || 'Todos';
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -225,6 +229,11 @@ export function DocumentsPage() {
       overdue: documents.filter((document) => document.status === 'OVERDUE').length
     };
   }, [documents]);
+
+  const activeCompanyName = useMemo(() => {
+    if (activeCompanyFilter === ALL_COMPANIES_FILTER) return 'Todas as empresas';
+    return companies.find((company) => company.id === activeCompanyFilter)?.name || 'Empresa selecionada';
+  }, [activeCompanyFilter, companies]);
 
   const companyFilteredDocuments = useMemo(() => {
     return documents.filter((document) => matchesCompanyFilter(document, activeCompanyFilter));
@@ -502,6 +511,14 @@ export function DocumentsPage() {
                   <strong>{filterCounts[option.id]}</strong>
                 </button>
               ))}
+            </div>
+
+            <div className="document-filter-summary">
+              <strong>{filteredDocuments.length}</strong>
+              <span>de {companyFilteredDocuments.length} documentos em {activeCompanyName}</span>
+              <span>· Aba: {getFilterLabel(documentFilterOptions, activeDocumentFilter)}</span>
+              <span>· Ordenação: {getFilterLabel(documentSortOptions, documentSort)}</span>
+              {documentSearch.trim() ? <span>· Busca: “{documentSearch.trim()}”</span> : null}
             </div>
           </div>
         ) : null}
