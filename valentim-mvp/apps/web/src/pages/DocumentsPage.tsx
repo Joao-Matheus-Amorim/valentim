@@ -39,7 +39,13 @@ function getStatusBadgeColor(status: DocumentStatus) {
 }
 
 function canReviewDocument(status: DocumentStatus) {
-  return status !== 'APPROVED' && status !== 'REJECTED';
+  return status !== 'APPROVED';
+}
+
+function getApproveButtonLabel(document: DocumentRequest, isReviewing: boolean) {
+  if (isReviewing) return 'Processando...';
+  if (document.status === 'REJECTED') return 'Aprovar reenviado';
+  return 'Aprovar';
 }
 
 export function DocumentsPage() {
@@ -249,44 +255,48 @@ export function DocumentsPage() {
 
         {!loading && documents.length > 0 ? (
           <div className="documents-list">
-            {documents.map((document) => (
-              <article className="document-card" key={document.id}>
-                <div className="document-card-main">
-                  <div>
-                    <strong>{document.documentType}</strong>
-                    <span>Empresa: {document.company?.name || 'Empresa não informada'}</span>
-                    <span>Competência: {document.competence || 'Não informada'} · Vencimento: {formatDate(document.dueDate)}</span>
-                    {document.status === 'REJECTED' && document.rejectionReason ? (
-                      <span>Motivo da rejeição: {document.rejectionReason}</span>
-                    ) : null}
+            {documents.map((document) => {
+              const isReviewing = reviewingDocumentId === document.id;
+
+              return (
+                <article className="document-card" key={document.id}>
+                  <div className="document-card-main">
+                    <div>
+                      <strong>{document.documentType}</strong>
+                      <span>Empresa: {document.company?.name || 'Empresa não informada'}</span>
+                      <span>Competência: {document.competence || 'Não informada'} · Vencimento: {formatDate(document.dueDate)}</span>
+                      {document.status === 'REJECTED' && document.rejectionReason ? (
+                        <span>Motivo da rejeição: {document.rejectionReason}</span>
+                      ) : null}
+                    </div>
+                    <div className="document-card-meta">
+                      <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
+                      <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
+                      {canReviewDocument(document.status) ? (
+                        <>
+                          <button
+                            className="document-secondary-button"
+                            type="button"
+                            disabled={isReviewing}
+                            onClick={() => handleReviewDocument(document.id, 'approve')}
+                          >
+                            {getApproveButtonLabel(document, isReviewing)}
+                          </button>
+                          <button
+                            className="document-secondary-button"
+                            type="button"
+                            disabled={isReviewing}
+                            onClick={() => handleReviewDocument(document.id, 'reject')}
+                          >
+                            {isReviewing ? 'Processando...' : 'Rejeitar'}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="document-card-meta">
-                    <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
-                    <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
-                    {canReviewDocument(document.status) ? (
-                      <>
-                        <button
-                          className="document-secondary-button"
-                          type="button"
-                          disabled={reviewingDocumentId === document.id}
-                          onClick={() => handleReviewDocument(document.id, 'approve')}
-                        >
-                          {reviewingDocumentId === document.id ? 'Processando...' : 'Aprovar'}
-                        </button>
-                        <button
-                          className="document-secondary-button"
-                          type="button"
-                          disabled={reviewingDocumentId === document.id}
-                          onClick={() => handleReviewDocument(document.id, 'reject')}
-                        >
-                          {reviewingDocumentId === document.id ? 'Processando...' : 'Rejeitar'}
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         ) : null}
       </Card>
