@@ -3,8 +3,11 @@ import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listCompanies } from '../services/companies';
 import { createDocument, listDocuments, reviewDocument } from '../services/documents';
+import { listPeople } from '../services/people';
 import type { Company } from '../types/company';
-import type { CreateDocumentInput, DocumentRequest, DocumentStatus } from '../types/document';
+import type { CreateDocumentInput, DocumentRequest, DocumentStatus, DocumentTargetType } from '../types/document';
+import type { Person } from '../types/person';
+import { personRoleLabels } from '../types/person';
 import './DocumentsPage.css';
 
 const statusLabels: Record<DocumentStatus, string> = {
@@ -40,10 +43,12 @@ const documentSortOptions: Array<{ id: DocumentSort; label: string }> = [
   { id: 'typeAsc', label: 'Tipo A-Z' }
 ];
 
-const documentTypeOptions = ['DAS', 'DARF', 'NF', 'EXTRATO', 'FOLHA', 'OUTRO'];
+const documentTypeOptions = ['DAS', 'DARF', 'NF', 'EXTRATO', 'FOLHA', 'OUTRO', 'CPF', 'RG', 'CNH', 'COMPROVANTE_RESIDENCIA', 'PROCURACAO', 'E-CPF'];
 
 const initialDocumentForm: CreateDocumentInput = {
   companyId: '',
+  targetType: 'COMPANY',
+  personId: '',
   documentType: '',
   competence: '',
   dueDate: ''
@@ -96,37 +101,18 @@ function formatDateTime(date?: string | null) {
 }
 
 function getDocumentDueDateSignal(document: DocumentRequest): DocumentDueDateSignal {
-  if (document.status === 'APPROVED') {
-    return { label: 'Conferido', color: 'green' };
-  }
-
-  if (document.status === 'REJECTED') {
-    return { label: 'Aguardando reenvio', color: 'rose' };
-  }
+  if (document.status === 'APPROVED') return { label: 'Conferido', color: 'green' };
+  if (document.status === 'REJECTED') return { label: 'Aguardando reenvio', color: 'rose' };
 
   const diffDays = getDueDateDiffDays(document.dueDate);
-
-  if (diffDays === null) {
-    return { label: 'Sem vencimento', color: 'slate' };
-  }
-
+  if (diffDays === null) return { label: 'Sem vencimento', color: 'slate' };
   if (diffDays < 0) {
     const daysLate = Math.abs(diffDays);
     return { label: daysLate === 1 ? 'Atrasado há 1 dia' : `Atrasado há ${daysLate} dias`, color: 'rose' };
   }
-
-  if (diffDays === 0) {
-    return { label: 'Vence hoje', color: 'amber' };
-  }
-
-  if (diffDays === 1) {
-    return { label: 'Vence amanhã', color: 'amber' };
-  }
-
-  if (diffDays <= 7) {
-    return { label: `Vence em ${diffDays} dias`, color: 'amber' };
-  }
-
+  if (diffDays === 0) return { label: 'Vence hoje', color: 'amber' };
+  if (diffDays === 1) return { label: 'Vence amanhã', color: 'amber' };
+  if (diffDays <= 7) return { label: `Vence em ${diffDays} dias`, color: 'amber' };
   return { label: `Vence em ${diffDays} dias`, color: 'slate' };
 }
 
@@ -164,6 +150,17 @@ function getReviewHistoryLabel(document: DocumentRequest) {
   return `Revisado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
 }
 
+function getDocumentTargetLabel(document: DocumentRequest) {
+  if (document.targetType === 'PERSON') {
+    const role = document.person?.role && personRoleLabels[document.person.role as keyof typeof personRoleLabels]
+      ? personRoleLabels[document.person.role as keyof typeof personRoleLabels]
+      : 'Pessoa';
+    return `Documento da pessoa: ${document.person?.name || 'Pessoa não informada'} · ${role}`;
+  }
+
+  return `Documento da empresa: ${document.company?.name || 'Empresa não informada'}`;
+}
+
 function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter) {
   if (filter === 'all') return true;
   if (filter === 'pending') return document.status === 'PENDING' || document.status === 'OVERDUE';
@@ -184,6 +181,9 @@ function matchesDocumentSearch(document: DocumentRequest, search: string) {
   const searchableText = [
     document.documentType,
     document.company?.name,
+    document.person?.name,
+    document.person?.cpf,
+    document.targetType === 'PERSON' ? 'documento da pessoa' : 'documento da empresa',
     document.competence,
     document.dueDate ? formatDate(document.dueDate) : null,
     statusLabels[document.status],
@@ -197,18 +197,9 @@ function matchesDocumentSearch(document: DocumentRequest, search: string) {
 
 function sortDocuments(documents: DocumentRequest[], sort: DocumentSort) {
   return [...documents].sort((a, b) => {
-    if (sort === 'newest') {
-      return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
-    }
-
-    if (sort === 'oldest') {
-      return getTimeValue(a.createdAt, 0) - getTimeValue(b.createdAt, 0);
-    }
-
-    if (sort === 'typeAsc') {
-      return a.documentType.localeCompare(b.documentType, 'pt-BR');
-    }
-
+    if (sort === 'newest') return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
+    if (sort === 'oldest') return getTimeValue(a.createdAt, 0) - getTimeValue(b.createdAt, 0);
+    if (sort === 'typeAsc') return a.documentType.localeCompare(b.documentType, 'pt-BR');
     const dueDateDiff = getTimeValue(a.dueDate) - getTimeValue(b.dueDate);
     if (dueDateDiff !== 0) return dueDateDiff;
     return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
@@ -244,6 +235,7 @@ function countOverdue(documents: DocumentRequest[]) {
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [activeDocumentFilter, setActiveDocumentFilter] = useState<DocumentFilter>('all');
   const [activeCompanyFilter, setActiveCompanyFilter] = useState<string>(ALL_COMPANIES_FILTER);
@@ -258,17 +250,28 @@ export function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const selectedCompany = useMemo(() => {
+    return companies.find((company) => company.id === documentForm.companyId) || null;
+  }, [companies, documentForm.companyId]);
+
+  const availablePeopleForSelectedCompany = useMemo(() => {
+    if (!selectedCompany) return people;
+    return people.filter((person) => !person.clientId || person.clientId === selectedCompany.clientId);
+  }, [people, selectedCompany]);
+
   async function loadDocuments() {
     setLoading(true);
     setError(null);
 
     try {
-      const [documentsData, companiesData] = await Promise.all([
+      const [documentsData, companiesData, peopleData] = await Promise.all([
         listDocuments(),
-        listCompanies()
+        listCompanies(),
+        listPeople()
       ]);
       setDocuments(documentsData);
       setCompanies(companiesData);
+      setPeople(peopleData);
     } catch (err) {
       setError('Não foi possível carregar os documentos. Verifique API/token.');
     } finally {
@@ -331,21 +334,26 @@ export function DocumentsPage() {
       setActiveDocumentFilter('rejected');
       return;
     }
-
     if (filter === 'overdue') {
       setActiveDocumentFilter('pending');
       setDocumentSearch('atrasado');
       return;
     }
-
     if (filter === 'dueToday') {
       setActiveDocumentFilter('all');
       setDocumentSearch('vence hoje');
       return;
     }
-
     setActiveDocumentFilter('all');
     setDocumentSearch('vence em');
+  }
+
+  function updateDocumentTargetType(targetType: DocumentTargetType) {
+    setDocumentForm({
+      ...documentForm,
+      targetType,
+      personId: targetType === 'PERSON' ? documentForm.personId || '' : ''
+    });
   }
 
   async function handleDocumentFormSubmit(event: FormEvent) {
@@ -355,12 +363,17 @@ export function DocumentsPage() {
     const documentType = documentForm.documentType.trim();
     const competence = documentForm.competence?.trim() || null;
     const dueDate = documentForm.dueDate || null;
+    const targetType = documentForm.targetType || 'COMPANY';
+    const personId = targetType === 'PERSON' ? documentForm.personId || null : null;
 
     if (!companyId) {
       setError('Selecione a empresa da solicitação.');
       return;
     }
-
+    if (targetType === 'PERSON' && !personId) {
+      setError('Selecione a pessoa dona deste documento.');
+      return;
+    }
     if (!documentType) {
       setError('Selecione o tipo de documento.');
       return;
@@ -371,13 +384,13 @@ export function DocumentsPage() {
     setSuccess(null);
 
     try {
-      await createDocument({ companyId, documentType, competence, dueDate });
+      await createDocument({ companyId, targetType, personId, documentType, competence, dueDate });
       setDocumentForm(initialDocumentForm);
       setActiveCompanyFilter(companyId);
       setActiveDocumentFilter('pending');
       setDocumentSearch('');
       setDocumentSort('dueDateAsc');
-      setSuccess('Solicitação criada com sucesso.');
+      setSuccess(targetType === 'PERSON' ? 'Solicitação de documento pessoal criada com sucesso.' : 'Solicitação de documento da empresa criada com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -430,11 +443,9 @@ export function DocumentsPage() {
 
   async function handleRejectSubmit(event: FormEvent) {
     event.preventDefault();
-
     if (!rejectingDocument) return;
 
     const reason = rejectionReason.trim();
-
     if (!reason) {
       setRejectionError('Informe o motivo para rejeitar o documento.');
       return;
@@ -468,7 +479,7 @@ export function DocumentsPage() {
       <div className="page-title documents-title">
         <div>
           <h2>Documentos</h2>
-          <p className="lead">Solicitações de documentos organizadas por empresa, competência e status.</p>
+          <p className="lead">Solicitações organizadas por empresa, pessoa física, competência e status.</p>
         </div>
         <div className="documents-actions">
           <Badge color="amber">Fila</Badge>
@@ -488,24 +499,16 @@ export function DocumentsPage() {
 
       <div className="document-urgency-grid">
         <button className="document-urgency-card amber" type="button" onClick={() => applyUrgencyFilter('dueToday')}>
-          <span>Vencem hoje</span>
-          <strong>{urgencyMetrics.dueToday}</strong>
-          <small>Prioridade imediata</small>
+          <span>Vencem hoje</span><strong>{urgencyMetrics.dueToday}</strong><small>Prioridade imediata</small>
         </button>
         <button className="document-urgency-card amber" type="button" onClick={() => applyUrgencyFilter('nextSevenDays')}>
-          <span>Próximos 7 dias</span>
-          <strong>{urgencyMetrics.nextSevenDays}</strong>
-          <small>Planejar cobrança</small>
+          <span>Próximos 7 dias</span><strong>{urgencyMetrics.nextSevenDays}</strong><small>Planejar cobrança</small>
         </button>
         <button className="document-urgency-card rose" type="button" onClick={() => applyUrgencyFilter('overdue')}>
-          <span>Atrasados</span>
-          <strong>{urgencyMetrics.overdue}</strong>
-          <small>Exige ação</small>
+          <span>Atrasados</span><strong>{urgencyMetrics.overdue}</strong><small>Exige ação</small>
         </button>
         <button className="document-urgency-card rose" type="button" onClick={() => applyUrgencyFilter('rejected')}>
-          <span>Aguardando reenvio</span>
-          <strong>{urgencyMetrics.rejected}</strong>
-          <small>Cliente precisa corrigir</small>
+          <span>Aguardando reenvio</span><strong>{urgencyMetrics.rejected}</strong><small>Cliente precisa corrigir</small>
         </button>
       </div>
 
@@ -513,119 +516,79 @@ export function DocumentsPage() {
         <Card title="Criar solicitação" color="amber">
           <form className="document-form" onSubmit={handleDocumentFormSubmit}>
             <label>
-              Empresa
+              Empresa vinculada
               <select
                 value={documentForm.companyId}
-                onChange={(event) => setDocumentForm({ ...documentForm, companyId: event.target.value })}
+                onChange={(event) => setDocumentForm({ ...documentForm, companyId: event.target.value, personId: '' })}
                 disabled={loading || saving || companies.length === 0}
               >
                 <option value="">Selecione uma empresa</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>{company.name}</option>
-                ))}
+                {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
               </select>
             </label>
             <label>
+              Alvo do documento
+              <select value={documentForm.targetType || 'COMPANY'} onChange={(event) => updateDocumentTargetType(event.target.value as DocumentTargetType)} disabled={saving}>
+                <option value="COMPANY">Documento da empresa</option>
+                <option value="PERSON">Documento da pessoa / dono / representante</option>
+              </select>
+            </label>
+            {(documentForm.targetType || 'COMPANY') === 'PERSON' ? (
+              <label>
+                Pessoa vinculada
+                <select value={documentForm.personId || ''} onChange={(event) => setDocumentForm({ ...documentForm, personId: event.target.value })} disabled={saving || !documentForm.companyId}>
+                  <option value="">Selecione a pessoa</option>
+                  {availablePeopleForSelectedCompany.map((person) => (
+                    <option key={person.id} value={person.id}>{person.name} · {personRoleLabels[person.role]}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label>
               Tipo de documento
-              <select
-                value={documentForm.documentType}
-                onChange={(event) => setDocumentForm({ ...documentForm, documentType: event.target.value })}
-                disabled={loading || saving}
-              >
+              <select value={documentForm.documentType} onChange={(event) => setDocumentForm({ ...documentForm, documentType: event.target.value })} disabled={loading || saving}>
                 <option value="">Selecione o tipo</option>
-                {documentTypeOptions.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
+                {documentTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
             </label>
             <label>
               Competência
-              <input
-                value={documentForm.competence || ''}
-                onChange={(event) => setDocumentForm({ ...documentForm, competence: event.target.value })}
-                placeholder="Ex.: 05/2026"
-                disabled={saving}
-              />
+              <input value={documentForm.competence || ''} onChange={(event) => setDocumentForm({ ...documentForm, competence: event.target.value })} placeholder="Ex.: 05/2026" disabled={saving} />
             </label>
             <label>
               Vencimento
-              <input
-                type="date"
-                value={documentForm.dueDate || ''}
-                onChange={(event) => setDocumentForm({ ...documentForm, dueDate: event.target.value })}
-                disabled={saving}
-              />
+              <input type="date" value={documentForm.dueDate || ''} onChange={(event) => setDocumentForm({ ...documentForm, dueDate: event.target.value })} disabled={saving} />
             </label>
-            <button className="document-primary-button" type="submit" disabled={loading || saving || companies.length === 0}>
-              {saving ? 'Criando...' : 'Criar solicitação'}
-            </button>
+            <button className="document-primary-button" type="submit" disabled={loading || saving || companies.length === 0}>{saving ? 'Criando...' : 'Criar solicitação'}</button>
           </form>
         </Card>
 
         <Card title="Como usar" color="slate">
           <div className="document-help-box">
-            <strong>Documento sempre pertence a uma empresa.</strong>
-            <span>Crie solicitações mensais para acompanhar o que o cliente precisa enviar.</span>
-            <span>Use as abas, o filtro de empresa, a busca e a ordenação para organizar a fila operacional.</span>
+            <strong>Documento pode ser da empresa ou da pessoa.</strong>
+            <span>Use documento da empresa para CNPJ, DAS, extratos e obrigações do negócio.</span>
+            <span>Use documento da pessoa para CPF, RG, CNH, procuração, e-CPF, sócios e representantes legais.</span>
           </div>
         </Card>
       </div>
 
       <Card title="Fila de documentos" color="slate">
-        {loading ? <p className="lead">Carregando documentos e empresas...</p> : null}
-
-        {!loading && companies.length === 0 ? (
-          <div className="documents-empty">
-            <strong>Nenhuma empresa disponível.</strong>
-            <span>Cadastre uma empresa antes de criar solicitações de documentos.</span>
-          </div>
-        ) : null}
+        {loading ? <p className="lead">Carregando documentos, empresas e pessoas...</p> : null}
+        {!loading && companies.length === 0 ? <div className="documents-empty"><strong>Nenhuma empresa disponível.</strong><span>Cadastre uma empresa antes de criar solicitações de documentos.</span></div> : null}
 
         {!loading && documents.length > 0 ? (
           <div className="document-filter-panel">
             <div className="document-company-filter">
-              <label>
-                Empresa
-                <select value={activeCompanyFilter} onChange={(event) => setActiveCompanyFilter(event.target.value)}>
-                  <option value={ALL_COMPANIES_FILTER}>Todas as empresas</option>
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>{company.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Busca rápida
-                <input
-                  value={documentSearch}
-                  onChange={(event) => setDocumentSearch(event.target.value)}
-                  placeholder="Buscar por tipo, competência, empresa, status ou motivo"
-                />
-              </label>
-              <label>
-                Ordenar por
-                <select value={documentSort} onChange={(event) => setDocumentSort(event.target.value as DocumentSort)}>
-                  {documentSortOptions.map((option) => (
-                    <option key={option.id} value={option.id}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>
-                Limpar filtros
-              </button>
+              <label>Empresa<select value={activeCompanyFilter} onChange={(event) => setActiveCompanyFilter(event.target.value)}><option value={ALL_COMPANIES_FILTER}>Todas as empresas</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label>
+              <label>Busca rápida<input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Buscar por tipo, pessoa, empresa, competência, status ou motivo" /></label>
+              <label>Ordenar por<select value={documentSort} onChange={(event) => setDocumentSort(event.target.value as DocumentSort)}>{documentSortOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+              <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>Limpar filtros</button>
             </div>
 
             <div className="document-tabs" role="tablist" aria-label="Filtros de documentos por status">
               {documentFilterOptions.map((option) => (
-                <button
-                  key={option.id}
-                  className={activeDocumentFilter === option.id ? 'document-tab active' : 'document-tab'}
-                  type="button"
-                  onClick={() => setActiveDocumentFilter(option.id)}
-                  role="tab"
-                  aria-selected={activeDocumentFilter === option.id}
-                >
-                  <span>{option.label}</span>
-                  <strong>{filterCounts[option.id]}</strong>
+                <button key={option.id} className={activeDocumentFilter === option.id ? 'document-tab active' : 'document-tab'} type="button" onClick={() => setActiveDocumentFilter(option.id)} role="tab" aria-selected={activeDocumentFilter === option.id}>
+                  <span>{option.label}</span><strong>{filterCounts[option.id]}</strong>
                 </button>
               ))}
             </div>
@@ -640,19 +603,8 @@ export function DocumentsPage() {
           </div>
         ) : null}
 
-        {!loading && companies.length > 0 && documents.length === 0 ? (
-          <div className="documents-empty">
-            <strong>Nenhum documento encontrado.</strong>
-            <span>Crie solicitações vinculadas a empresas para acompanhar a entrega mensal.</span>
-          </div>
-        ) : null}
-
-        {!loading && documents.length > 0 && filteredDocuments.length === 0 ? (
-          <div className="documents-empty">
-            <strong>Nenhum documento neste filtro.</strong>
-            <span>Troque a empresa, mude a aba de status, ajuste a busca ou crie uma nova solicitação para movimentar a fila.</span>
-          </div>
-        ) : null}
+        {!loading && companies.length > 0 && documents.length === 0 ? <div className="documents-empty"><strong>Nenhum documento encontrado.</strong><span>Crie solicitações vinculadas a empresas ou pessoas para acompanhar a entrega mensal.</span></div> : null}
+        {!loading && documents.length > 0 && filteredDocuments.length === 0 ? <div className="documents-empty"><strong>Nenhum documento neste filtro.</strong><span>Troque a empresa, mude a aba de status, ajuste a busca ou crie uma nova solicitação.</span></div> : null}
 
         {!loading && filteredDocuments.length > 0 ? (
           <div className="documents-list">
@@ -666,37 +618,21 @@ export function DocumentsPage() {
                   <div className="document-card-main">
                     <div>
                       <strong>{document.documentType}</strong>
-                      <span>Empresa: {document.company?.name || 'Empresa não informada'}</span>
+                      <span className="document-target-note">{getDocumentTargetLabel(document)}</span>
+                      <span>Empresa vinculada: {document.company?.name || 'Empresa não informada'}</span>
                       <span>Competência: {document.competence || 'Não informada'} · Vencimento: {formatDate(document.dueDate)}</span>
-                      {reviewHistoryLabel ? (
-                        <span className="document-review-history">{reviewHistoryLabel}</span>
-                      ) : null}
-                      {document.status === 'REJECTED' && document.rejectionReason ? (
-                        <span>Motivo da rejeição: {document.rejectionReason}</span>
-                      ) : null}
+                      {reviewHistoryLabel ? <span className="document-review-history">{reviewHistoryLabel}</span> : null}
+                      {document.status === 'REJECTED' && document.rejectionReason ? <span>Motivo da rejeição: {document.rejectionReason}</span> : null}
                     </div>
                     <div className="document-card-meta">
+                      <Badge color={document.targetType === 'PERSON' ? 'teal' : 'sky'}>{document.targetType === 'PERSON' ? 'Pessoa' : 'Empresa'}</Badge>
                       <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
                       <Badge color={dueDateSignal.color}>{dueDateSignal.label}</Badge>
                       <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
                       {canReviewDocument(document.status) ? (
                         <>
-                          <button
-                            className="document-secondary-button"
-                            type="button"
-                            disabled={isReviewing}
-                            onClick={() => handleApproveDocument(document.id)}
-                          >
-                            {getApproveButtonLabel(document, isReviewing)}
-                          </button>
-                          <button
-                            className="document-secondary-button"
-                            type="button"
-                            disabled={isReviewing}
-                            onClick={() => openRejectModal(document)}
-                          >
-                            Rejeitar
-                          </button>
+                          <button className="document-secondary-button" type="button" disabled={isReviewing} onClick={() => handleApproveDocument(document.id)}>{getApproveButtonLabel(document, isReviewing)}</button>
+                          <button className="document-secondary-button" type="button" disabled={isReviewing} onClick={() => openRejectModal(document)}>Rejeitar</button>
                         </>
                       ) : null}
                     </div>
@@ -711,40 +647,12 @@ export function DocumentsPage() {
       {rejectingDocument ? (
         <div className="document-modal-backdrop" role="presentation" onMouseDown={closeRejectModal}>
           <form className="document-reject-modal" onSubmit={handleRejectSubmit} onMouseDown={(event) => event.stopPropagation()}>
-            <div className="document-modal-header">
-              <strong>Rejeitar documento</strong>
-              <span>{rejectingDocument.documentType} · {rejectingDocument.company?.name || 'Empresa não informada'}</span>
-            </div>
-
-            <label>
-              Motivo da rejeição
-              <textarea
-                value={rejectionReason}
-                onChange={(event) => setRejectionReason(event.target.value)}
-                placeholder="Ex.: Documento ilegível. Cliente precisa reenviar em melhor qualidade."
-                disabled={reviewingDocumentId === rejectingDocument.id}
-                autoFocus
-              />
-            </label>
-
+            <div className="document-modal-header"><strong>Rejeitar documento</strong><span>{rejectingDocument.documentType} · {rejectingDocument.company?.name || 'Empresa não informada'}</span></div>
+            <label>Motivo da rejeição<textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Ex.: Documento ilegível. Cliente precisa reenviar em melhor qualidade." disabled={reviewingDocumentId === rejectingDocument.id} autoFocus /></label>
             {rejectionError ? <div className="documents-alert error">{rejectionError}</div> : null}
-
             <div className="document-modal-actions">
-              <button
-                className="document-secondary-button"
-                type="button"
-                onClick={closeRejectModal}
-                disabled={reviewingDocumentId === rejectingDocument.id}
-              >
-                Cancelar
-              </button>
-              <button
-                className="document-primary-button"
-                type="submit"
-                disabled={reviewingDocumentId === rejectingDocument.id}
-              >
-                {reviewingDocumentId === rejectingDocument.id ? 'Rejeitando...' : 'Confirmar rejeição'}
-              </button>
+              <button className="document-secondary-button" type="button" onClick={closeRejectModal} disabled={reviewingDocumentId === rejectingDocument.id}>Cancelar</button>
+              <button className="document-primary-button" type="submit" disabled={reviewingDocumentId === rejectingDocument.id}>{reviewingDocumentId === rejectingDocument.id ? 'Rejeitando...' : 'Confirmar rejeição'}</button>
             </div>
           </form>
         </div>
