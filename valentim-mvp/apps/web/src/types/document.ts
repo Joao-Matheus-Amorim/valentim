@@ -6,6 +6,7 @@ export type DocumentStatus =
   | 'REJECTED'
   | 'OVERDUE';
 
+export type DocumentTargetType = 'COMPANY' | 'PERSON';
 export type DocumentReviewAction = 'approve' | 'reject';
 
 export interface DocumentCompany {
@@ -14,6 +15,17 @@ export interface DocumentCompany {
   name: string;
   cnpj?: string | null;
   regime?: string | null;
+}
+
+export interface DocumentPerson {
+  id: string;
+  officeId: string;
+  clientId?: string | null;
+  name: string;
+  cpf?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role: string;
 }
 
 export interface DocumentReviewer {
@@ -62,6 +74,9 @@ export interface DocumentRequest {
   id: string;
   companyId: string;
   company?: DocumentCompany;
+  targetType?: DocumentTargetType;
+  personId?: string | null;
+  person?: DocumentPerson | null;
   documentType: string;
   competence?: string | null;
   dueDate?: string | null;
@@ -79,6 +94,8 @@ export interface DocumentRequest {
 
 export interface CreateDocumentInput {
   companyId: string;
+  targetType?: DocumentTargetType;
+  personId?: string | null;
   documentType: string;
   competence?: string | null;
   dueDate?: string | null;
