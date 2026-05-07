@@ -53,6 +53,9 @@ export function DocumentsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [reviewingDocumentId, setReviewingDocumentId] = useState<string | null>(null);
+  const [rejectingDocument, setRejectingDocument] = useState<DocumentRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionError, setRejectionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,27 +128,64 @@ export function DocumentsPage() {
     }
   }
 
-  async function handleReviewDocument(documentId: string, action: 'approve' | 'reject') {
-    const reason = action === 'reject'
-      ? window.prompt('Informe o motivo da rejeição do documento:')?.trim()
-      : undefined;
-
-    if (action === 'reject' && !reason) {
-      setError('Informe o motivo para rejeitar o documento.');
-      return;
-    }
-
+  async function handleApproveDocument(documentId: string) {
     setReviewingDocumentId(documentId);
     setError(null);
     setSuccess(null);
 
     try {
-      await reviewDocument(documentId, { action, reason });
-      setSuccess(action === 'approve' ? 'Documento aprovado com sucesso.' : 'Documento rejeitado com motivo registrado.');
+      await reviewDocument(documentId, { action: 'approve' });
+      setSuccess('Documento aprovado com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
-      setError('Não foi possível revisar o documento. Verifique API/token e tente novamente.');
+      setError('Não foi possível aprovar o documento. Verifique API/token e tente novamente.');
+    } finally {
+      setReviewingDocumentId(null);
+    }
+  }
+
+  function openRejectModal(document: DocumentRequest) {
+    setRejectingDocument(document);
+    setRejectionReason(document.rejectionReason || '');
+    setRejectionError(null);
+    setError(null);
+    setSuccess(null);
+  }
+
+  function closeRejectModal() {
+    if (reviewingDocumentId) return;
+    setRejectingDocument(null);
+    setRejectionReason('');
+    setRejectionError(null);
+  }
+
+  async function handleRejectSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    if (!rejectingDocument) return;
+
+    const reason = rejectionReason.trim();
+
+    if (!reason) {
+      setRejectionError('Informe o motivo para rejeitar o documento.');
+      return;
+    }
+
+    setReviewingDocumentId(rejectingDocument.id);
+    setRejectionError(null);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await reviewDocument(rejectingDocument.id, { action: 'reject', reason });
+      setSuccess('Documento rejeitado com motivo registrado.');
+      setRejectingDocument(null);
+      setRejectionReason('');
+      window.setTimeout(() => setSuccess(null), 3000);
+      await loadDocuments();
+    } catch (err) {
+      setRejectionError('Não foi possível rejeitar o documento. Verifique API/token e tente novamente.');
     } finally {
       setReviewingDocumentId(null);
     }
@@ -278,7 +318,7 @@ export function DocumentsPage() {
                             className="document-secondary-button"
                             type="button"
                             disabled={isReviewing}
-                            onClick={() => handleReviewDocument(document.id, 'approve')}
+                            onClick={() => handleApproveDocument(document.id)}
                           >
                             {getApproveButtonLabel(document, isReviewing)}
                           </button>
@@ -286,9 +326,9 @@ export function DocumentsPage() {
                             className="document-secondary-button"
                             type="button"
                             disabled={isReviewing}
-                            onClick={() => handleReviewDocument(document.id, 'reject')}
+                            onClick={() => openRejectModal(document)}
                           >
-                            {isReviewing ? 'Processando...' : 'Rejeitar'}
+                            Rejeitar
                           </button>
                         </>
                       ) : null}
@@ -300,6 +340,48 @@ export function DocumentsPage() {
           </div>
         ) : null}
       </Card>
+
+      {rejectingDocument ? (
+        <div className="document-modal-backdrop" role="presentation" onMouseDown={closeRejectModal}>
+          <form className="document-reject-modal" onSubmit={handleRejectSubmit} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="document-modal-header">
+              <strong>Rejeitar documento</strong>
+              <span>{rejectingDocument.documentType} · {rejectingDocument.company?.name || 'Empresa não informada'}</span>
+            </div>
+
+            <label>
+              Motivo da rejeição
+              <textarea
+                value={rejectionReason}
+                onChange={(event) => setRejectionReason(event.target.value)}
+                placeholder="Ex.: Documento ilegível. Cliente precisa reenviar em melhor qualidade."
+                disabled={reviewingDocumentId === rejectingDocument.id}
+                autoFocus
+              />
+            </label>
+
+            {rejectionError ? <div className="documents-alert error">{rejectionError}</div> : null}
+
+            <div className="document-modal-actions">
+              <button
+                className="document-secondary-button"
+                type="button"
+                onClick={closeRejectModal}
+                disabled={reviewingDocumentId === rejectingDocument.id}
+              >
+                Cancelar
+              </button>
+              <button
+                className="document-primary-button"
+                type="submit"
+                disabled={reviewingDocumentId === rejectingDocument.id}
+              >
+                {reviewingDocumentId === rejectingDocument.id ? 'Rejeitando...' : 'Confirmar rejeição'}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
