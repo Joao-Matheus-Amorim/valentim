@@ -111,6 +111,64 @@
   color: #e2e8f0;
 }
 
+.document-urgency-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.72rem;
+}
+
+.document-urgency-card {
+  display: grid;
+  gap: 0.22rem;
+  text-align: left;
+  border: 1px solid rgba(100, 116, 139, 0.22);
+  border-radius: 1rem;
+  padding: 0.95rem;
+  background: rgba(2, 6, 23, 0.24);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.document-urgency-card:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.document-urgency-card span {
+  color: #94a3b8;
+  font-size: 0.74rem;
+}
+
+.document-urgency-card strong {
+  color: #e2e8f0;
+  font-size: 1.55rem;
+  line-height: 1.1;
+}
+
+.document-urgency-card small {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.document-urgency-card.amber {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(120, 53, 15, 0.24);
+}
+
+.document-urgency-card.amber strong {
+  color: #fde68a;
+}
+
+.document-urgency-card.rose {
+  border-color: rgba(244, 63, 94, 0.32);
+  background: rgba(136, 19, 55, 0.22);
+}
+
+.document-urgency-card.rose strong {
+  color: #fecdd3;
+}
+
 .document-filter-panel {
   display: grid;
   gap: 0.75rem;
@@ -347,6 +405,10 @@
   .documents-actions,
   .document-card-meta {
     justify-content: flex-start;
+  }
+
+  .document-urgency-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .document-company-filter {
