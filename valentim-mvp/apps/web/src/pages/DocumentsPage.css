@@ -154,6 +154,74 @@
   gap: 0.35rem;
 }
 
+.document-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.document-reject-modal {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(244, 63, 94, 0.32);
+  border-radius: 1.1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.document-modal-header {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.document-modal-header strong {
+  color: #fecdd3;
+  font-size: 1rem;
+}
+
+.document-modal-header span {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.document-reject-modal label {
+  display: grid;
+  gap: 0.45rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+}
+
+.document-reject-modal textarea {
+  min-height: 8.5rem;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(100, 116, 139, 0.42);
+  border-radius: 0.85rem;
+  background: rgba(15, 23, 42, 0.62);
+  color: #e2e8f0;
+  padding: 0.8rem 0.9rem;
+  outline: none;
+}
+
+.document-reject-modal textarea:focus {
+  border-color: rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.document-modal-actions {
+  display: flex;
+  gap: 0.55rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 900px) {
   .documents-title,
   .document-card-main {
@@ -163,5 +231,13 @@
   .documents-actions,
   .document-card-meta {
     justify-content: flex-start;
+  }
+
+  .document-modal-actions {
+    justify-content: stretch;
+  }
+
+  .document-modal-actions button {
+    flex: 1;
   }
 }
