@@ -18,8 +18,10 @@ const statusLabels: Record<DocumentStatus, string> = {
 
 type DocumentFilter = 'all' | 'pending' | 'sent' | 'approved' | 'rejected';
 type DocumentSort = 'dueDateAsc' | 'newest' | 'oldest' | 'typeAsc';
+type DocumentDueDateSignal = { label: string; color: 'slate' | 'green' | 'amber' | 'rose' };
 
 const ALL_COMPANIES_FILTER = 'all';
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const documentFilterOptions: Array<{ id: DocumentFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
@@ -59,9 +61,52 @@ function getTimeValue(date?: string | null, fallback = Number.MAX_SAFE_INTEGER) 
   return Number.isNaN(timestamp) ? fallback : timestamp;
 }
 
+function getStartOfDay(date: Date) {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
 function formatDate(date?: string | null) {
   if (!date) return 'Sem vencimento';
   return new Date(date).toLocaleDateString('pt-BR');
+}
+
+function getDocumentDueDateSignal(document: DocumentRequest): DocumentDueDateSignal {
+  if (document.status === 'APPROVED') {
+    return { label: 'Conferido', color: 'green' };
+  }
+
+  if (document.status === 'REJECTED') {
+    return { label: 'Aguardando reenvio', color: 'rose' };
+  }
+
+  if (!document.dueDate) {
+    return { label: 'Sem vencimento', color: 'slate' };
+  }
+
+  const today = getStartOfDay(new Date());
+  const dueDate = getStartOfDay(new Date(document.dueDate));
+  const diffDays = Math.round((dueDate.getTime() - today.getTime()) / DAY_IN_MS);
+
+  if (diffDays < 0) {
+    const daysLate = Math.abs(diffDays);
+    return { label: daysLate === 1 ? 'Atrasado há 1 dia' : `Atrasado há ${daysLate} dias`, color: 'rose' };
+  }
+
+  if (diffDays === 0) {
+    return { label: 'Vence hoje', color: 'amber' };
+  }
+
+  if (diffDays === 1) {
+    return { label: 'Vence amanhã', color: 'amber' };
+  }
+
+  if (diffDays <= 7) {
+    return { label: `Vence em ${diffDays} dias`, color: 'amber' };
+  }
+
+  return { label: `Vence em ${diffDays} dias`, color: 'slate' };
 }
 
 function getStatusBadgeColor(status: DocumentStatus) {
@@ -98,12 +143,14 @@ function matchesDocumentSearch(document: DocumentRequest, search: string) {
   const normalizedSearch = normalizeSearchValue(search);
   if (!normalizedSearch) return true;
 
+  const dueDateSignal = getDocumentDueDateSignal(document);
   const searchableText = [
     document.documentType,
     document.company?.name,
     document.competence,
     document.dueDate ? formatDate(document.dueDate) : null,
     statusLabels[document.status],
+    dueDateSignal.label,
     document.rejectionReason
   ].map(normalizeSearchValue).join(' ');
 
@@ -477,6 +524,7 @@ export function DocumentsPage() {
           <div className="documents-list">
             {filteredDocuments.map((document) => {
               const isReviewing = reviewingDocumentId === document.id;
+              const dueDateSignal = getDocumentDueDateSignal(document);
 
               return (
                 <article className="document-card" key={document.id}>
@@ -491,6 +539,7 @@ export function DocumentsPage() {
                     </div>
                     <div className="document-card-meta">
                       <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
+                      <Badge color={dueDateSignal.color}>{dueDateSignal.label}</Badge>
                       <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
                       {canReviewDocument(document.status) ? (
                         <>
