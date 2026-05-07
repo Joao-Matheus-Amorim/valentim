@@ -18,6 +18,8 @@ const statusLabels: Record<DocumentStatus, string> = {
 
 type DocumentFilter = 'all' | 'pending' | 'sent' | 'approved' | 'rejected';
 
+const ALL_COMPANIES_FILTER = 'all';
+
 const documentFilterOptions: Array<{ id: DocumentFilter; label: string }> = [
   { id: 'all', label: 'Todos' },
   { id: 'pending', label: 'Pendentes' },
@@ -66,11 +68,16 @@ function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter
   return document.status === 'REJECTED';
 }
 
+function matchesCompanyFilter(document: DocumentRequest, companyFilter: string) {
+  return companyFilter === ALL_COMPANIES_FILTER || document.companyId === companyFilter;
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [activeDocumentFilter, setActiveDocumentFilter] = useState<DocumentFilter>('all');
+  const [activeCompanyFilter, setActiveCompanyFilter] = useState<string>(ALL_COMPANIES_FILTER);
   const [reviewingDocumentId, setReviewingDocumentId] = useState<string | null>(null);
   const [rejectingDocument, setRejectingDocument] = useState<DocumentRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -112,16 +119,20 @@ export function DocumentsPage() {
     };
   }, [documents]);
 
+  const companyFilteredDocuments = useMemo(() => {
+    return documents.filter((document) => matchesCompanyFilter(document, activeCompanyFilter));
+  }, [activeCompanyFilter, documents]);
+
   const filterCounts = useMemo(() => {
     return documentFilterOptions.reduce<Record<DocumentFilter, number>>((acc, option) => {
-      acc[option.id] = documents.filter((document) => matchesDocumentFilter(document, option.id)).length;
+      acc[option.id] = companyFilteredDocuments.filter((document) => matchesDocumentFilter(document, option.id)).length;
       return acc;
     }, { all: 0, pending: 0, sent: 0, approved: 0, rejected: 0 });
-  }, [documents]);
+  }, [companyFilteredDocuments]);
 
   const filteredDocuments = useMemo(() => {
-    return documents.filter((document) => matchesDocumentFilter(document, activeDocumentFilter));
-  }, [activeDocumentFilter, documents]);
+    return companyFilteredDocuments.filter((document) => matchesDocumentFilter(document, activeDocumentFilter));
+  }, [activeDocumentFilter, companyFilteredDocuments]);
 
   async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
@@ -148,6 +159,8 @@ export function DocumentsPage() {
     try {
       await createDocument({ companyId, documentType, competence, dueDate });
       setDocumentForm(initialDocumentForm);
+      setActiveCompanyFilter(companyId);
+      setActiveDocumentFilter('pending');
       setSuccess('Solicitação criada com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
@@ -165,6 +178,7 @@ export function DocumentsPage() {
 
     try {
       await reviewDocument(documentId, { action: 'approve' });
+      setActiveDocumentFilter('approved');
       setSuccess('Documento aprovado com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
@@ -190,6 +204,11 @@ export function DocumentsPage() {
     setRejectionError(null);
   }
 
+  function clearDocumentFilters() {
+    setActiveCompanyFilter(ALL_COMPANIES_FILTER);
+    setActiveDocumentFilter('all');
+  }
+
   async function handleRejectSubmit(event: FormEvent) {
     event.preventDefault();
 
@@ -212,6 +231,7 @@ export function DocumentsPage() {
       setSuccess('Documento rejeitado com motivo registrado.');
       setRejectingDocument(null);
       setRejectionReason('');
+      setActiveCompanyFilter(rejectingDocument.companyId);
       setActiveDocumentFilter('rejected');
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
@@ -302,7 +322,7 @@ export function DocumentsPage() {
           <div className="document-help-box">
             <strong>Documento sempre pertence a uma empresa.</strong>
             <span>Crie solicitações mensais para acompanhar o que o cliente precisa enviar.</span>
-            <span>Quando o documento chegar, o status poderá ser acompanhado pela fila.</span>
+            <span>Use as abas e o filtro de empresa para organizar a fila operacional.</span>
           </div>
         </Card>
       </div>
@@ -318,20 +338,37 @@ export function DocumentsPage() {
         ) : null}
 
         {!loading && documents.length > 0 ? (
-          <div className="document-tabs" role="tablist" aria-label="Filtros de documentos por status">
-            {documentFilterOptions.map((option) => (
-              <button
-                key={option.id}
-                className={activeDocumentFilter === option.id ? 'document-tab active' : 'document-tab'}
-                type="button"
-                onClick={() => setActiveDocumentFilter(option.id)}
-                role="tab"
-                aria-selected={activeDocumentFilter === option.id}
-              >
-                <span>{option.label}</span>
-                <strong>{filterCounts[option.id]}</strong>
+          <div className="document-filter-panel">
+            <div className="document-company-filter">
+              <label>
+                Empresa
+                <select value={activeCompanyFilter} onChange={(event) => setActiveCompanyFilter(event.target.value)}>
+                  <option value={ALL_COMPANIES_FILTER}>Todas as empresas</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>{company.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>
+                Limpar filtros
               </button>
-            ))}
+            </div>
+
+            <div className="document-tabs" role="tablist" aria-label="Filtros de documentos por status">
+              {documentFilterOptions.map((option) => (
+                <button
+                  key={option.id}
+                  className={activeDocumentFilter === option.id ? 'document-tab active' : 'document-tab'}
+                  type="button"
+                  onClick={() => setActiveDocumentFilter(option.id)}
+                  role="tab"
+                  aria-selected={activeDocumentFilter === option.id}
+                >
+                  <span>{option.label}</span>
+                  <strong>{filterCounts[option.id]}</strong>
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
 
@@ -344,8 +381,8 @@ export function DocumentsPage() {
 
         {!loading && documents.length > 0 && filteredDocuments.length === 0 ? (
           <div className="documents-empty">
-            <strong>Nenhum documento nesta aba.</strong>
-            <span>Troque o filtro ou crie uma nova solicitação para movimentar a fila.</span>
+            <strong>Nenhum documento neste filtro.</strong>
+            <span>Troque a empresa, mude a aba de status ou crie uma nova solicitação para movimentar a fila.</span>
           </div>
         ) : null}
 
