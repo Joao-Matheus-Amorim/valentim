@@ -6,7 +6,7 @@ import { isFinished, isOverdue, isDueToday } from '../utils/task';
 import { formatDate } from '../utils/format';
 import type { Color } from '../types/ui';
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus } from '../types/task';
-import { TASK_PRIORITIES, TASK_SOURCES, TASK_STATUSES } from '../types/task';
+import { DOCUMENT_REUPLOAD_TASK_SOURCE, TASK_PRIORITIES, TASK_SOURCES, TASK_STATUSES } from '../types/task';
 import './TasksPage.css';
 
 const initialForm: CreateTaskInput = {
@@ -16,6 +16,16 @@ const initialForm: CreateTaskInput = {
 
 const statusLabels = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.label]));
 const priorityLabels = Object.fromEntries(TASK_PRIORITIES.map((p) => [p.value, p.label]));
+const sourceLabels: Record<string, string> = {
+  manual: 'Manual',
+  document: 'Documento',
+  [DOCUMENT_REUPLOAD_TASK_SOURCE]: 'Reenvio de documento',
+  ai: 'IA',
+  whatsapp: 'WhatsApp',
+  deadline: 'Prazo',
+  finance: 'Financeiro',
+  proposal: 'Proposta'
+};
 
 function priorityColor(priority: TaskPriority): Color {
   if (priority === 'URGENT') return 'rose';
@@ -43,6 +53,22 @@ function normalizePayload(form: CreateTaskInput): CreateTaskInput {
     status: form.status || 'PENDING',
     priority: form.priority || 'MEDIUM'
   };
+}
+
+function isDocumentReuploadTask(task: Task) {
+  return task.source === DOCUMENT_REUPLOAD_TASK_SOURCE;
+}
+
+function getTaskCardClassName(task: Task) {
+  const classNames = ['task-card'];
+  if (isOverdue(task)) classNames.push('overdue');
+  if (isDocumentReuploadTask(task)) classNames.push('document-reupload');
+  return classNames.join(' ');
+}
+
+function getSourceLabel(source?: string | null) {
+  if (!source) return 'Manual';
+  return sourceLabels[source] || source;
 }
 
 export function TasksPage() {
@@ -102,7 +128,7 @@ export function TasksPage() {
             <label>Descrição<textarea value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Contexto, instruções ou observações para a equipe" /></label>
             <div className="task-form-grid">
               <label>Prioridade<select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as TaskPriority })}>{TASK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
-              <label>Origem<select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{TASK_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label>Origem<select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{TASK_SOURCES.map((s) => <option key={s} value={s}>{getSourceLabel(s)}</option>)}</select></label>
             </div>
             <div className="task-form-grid">
               <label>Status inicial<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as TaskStatus })}>{TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
@@ -116,7 +142,7 @@ export function TasksPage() {
           <div className="task-filters">
             <label>Status<select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="ALL">Todos</option>{TASK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
             <label>Prioridade<select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}><option value="ALL">Todas</option>{TASK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
-            <label>Origem<select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })}><option value="ALL">Todas</option>{TASK_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+            <label>Origem<select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })}><option value="ALL">Todas</option>{TASK_SOURCES.map((s) => <option key={s} value={s}>{getSourceLabel(s)}</option>)}</select></label>
             <button className="task-secondary-button" type="button" onClick={() => setFilters({ status: 'ALL', priority: 'ALL', source: 'ALL' })}>Limpar filtros</button>
           </div>
         </Card>
@@ -130,19 +156,25 @@ export function TasksPage() {
         {!loading && filteredTasks.length > 0 ? (
           <div className="tasks-list">
             {filteredTasks.map((task: Task) => (
-              <article className={isOverdue(task) ? 'task-card overdue' : 'task-card'} key={task.id}>
+              <article className={getTaskCardClassName(task)} key={task.id}>
                 <div className="task-card-main">
                   <div className="task-card-head">
                     <strong>{task.title}</strong>
                     <div className="task-badges">
+                      {isDocumentReuploadTask(task) ? <Badge color="rose">Reenvio de documento</Badge> : null}
                       <Badge color={priorityColor(task.priority)}>{priorityLabels[task.priority]}</Badge>
                       <Badge color={statusColor(task.status)}>{statusLabels[task.status]}</Badge>
                     </div>
                   </div>
+                  {isDocumentReuploadTask(task) ? (
+                    <div className="task-system-note">Tarefa criada automaticamente após rejeição de documento.</div>
+                  ) : null}
                   {task.description ? <p>{task.description}</p> : null}
                   <div className="task-meta">
-                    <span>Origem: {task.source || 'manual'}</span>
+                    <span>Origem: {getSourceLabel(task.source)}</span>
                     <span>Prazo: {formatDate(task.dueDate)}</span>
+                    {task.company?.name ? <span>Empresa: {task.company.name}</span> : null}
+                    {task.documentRequest?.documentType ? <span>Documento: {task.documentRequest.documentType}</span> : null}
                     {isDueToday(task) ? <span className="task-due-today">vence hoje</span> : null}
                     {isOverdue(task) ? <span className="task-overdue">atrasada</span> : null}
                   </div>
