@@ -30,9 +30,19 @@ function countTasks(person: Person) {
 }
 
 function getPersonNextStep(person: Person) {
-  if (countDocuments(person) === 0) return 'Vincule documentos pessoais a esta pessoa.';
-  if (countTasks(person) === 0) return 'Crie tarefas para acompanhar pendências desta pessoa.';
-  return 'Acompanhe documentos, tarefas e vínculos operacionais.';
+  if (!person.clientId) return 'Vincule esta pessoa ao cliente/contratante correto.';
+  if (countDocuments(person) === 0) return 'Depois, vincule documentos pessoais como CPF, RG, CNH, procuração ou e-CPF.';
+  if (countTasks(person) === 0) return 'Crie tarefas para acompanhar pendências pessoais ou de representação.';
+  return 'Acompanhe documentos pessoais, tarefas e vínculos operacionais.';
+}
+
+function getPersonOperationalRole(person: Person) {
+  if (person.role === 'OWNER') return 'Dono ou titular ligado ao cliente.';
+  if (person.role === 'PARTNER') return 'Sócio vinculado à operação do cliente.';
+  if (person.role === 'LEGAL_REPRESENTATIVE') return 'Representante legal para documentos e assinaturas.';
+  if (person.role === 'RESPONSIBLE') return 'Responsável operacional ou administrativo.';
+  if (person.role === 'CONTACT') return 'Contato para cobrança, envio ou confirmação.';
+  return 'Pessoa vinculada ao cliente para fins operacionais.';
 }
 
 export function PeoplePage() {
@@ -61,7 +71,7 @@ export function PeoplePage() {
       setPeople(peopleData);
       setClients(clientsData);
     } catch (err) {
-      setError('Não foi possível carregar as pessoas. Verifique API/token.');
+      setError('Não foi possível carregar donos, sócios e representantes. Verifique API/token.');
     } finally {
       setLoading(false);
     }
@@ -142,7 +152,7 @@ export function PeoplePage() {
       setSuccess('Pessoa excluída com sucesso.');
       window.setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError('Não foi possível excluir. Verifique se a pessoa possui documentos ou tarefas vinculadas.');
+      setError('Não foi possível excluir. Verifique se a pessoa possui documentos pessoais ou tarefas vinculadas.');
     } finally {
       setDeletingPersonId(null);
     }
@@ -161,7 +171,7 @@ export function PeoplePage() {
     };
 
     if (!payload.name) {
-      setError('Informe o nome da pessoa.');
+      setError('Informe o nome da pessoa física.');
       return;
     }
 
@@ -192,7 +202,7 @@ export function PeoplePage() {
     }
   }
 
-  const formTitle = editingPerson ? 'Editar pessoa' : 'Cadastrar pessoa';
+  const formTitle = editingPerson ? 'Editar pessoa física vinculada' : 'Cadastrar pessoa física vinculada';
   const submitLabel = editingPerson ? 'Salvar alterações' : 'Criar pessoa';
 
   return (
@@ -200,10 +210,10 @@ export function PeoplePage() {
       <div className="page-title people-title">
         <div>
           <h2>Pessoas</h2>
-          <p className="lead">Donos, sócios, representantes legais e responsáveis vinculados aos clientes do escritório.</p>
+          <p className="lead">Cadastre donos, sócios, representantes legais e responsáveis. Esta área não substitui Clientes: ela identifica as pessoas físicas por trás do cliente ou da empresa.</p>
         </div>
         <div className="people-actions">
-          <Badge color="teal">Pessoas</Badge>
+          <Badge color="teal">Pessoas físicas</Badge>
           <button className="person-secondary-button" type="button" onClick={loadPeople}>Atualizar</button>
         </div>
       </div>
@@ -211,27 +221,33 @@ export function PeoplePage() {
       {error ? <div className="people-alert error">{error}</div> : null}
       {success ? <div className="people-alert success">{success}</div> : null}
 
+      <div className="people-context-box">
+        <strong>Diferença operacional</strong>
+        <span><b>Clientes</b> são os contratantes/carteiras do escritório. <b>Pessoas</b> são donos, sócios, representantes ou responsáveis ligados a esses clientes.</span>
+        <span>Use esta área para documentos pessoais: CPF, RG, CNH, comprovante de residência, procuração, certificado e-CPF e assinaturas.</span>
+      </div>
+
       <div className="grid four">
-        <Card color="teal" title="Pessoas"><div className="metric">{metrics.total}</div><p>Total cadastrado.</p></Card>
-        <Card color="green" title="Donos"><div className="metric">{metrics.owners}</div><p>Pessoas marcadas como donas.</p></Card>
+        <Card color="teal" title="Pessoas físicas"><div className="metric">{metrics.total}</div><p>Donos, sócios e responsáveis cadastrados.</p></Card>
+        <Card color="green" title="Donos"><div className="metric">{metrics.owners}</div><p>Titulares ou donos vinculados.</p></Card>
         <Card color="violet" title="Representantes"><div className="metric">{metrics.legalRepresentatives}</div><p>Representantes legais.</p></Card>
-        <Card color="amber" title="Documentos"><div className="metric">{metrics.linkedDocuments}</div><p>Documentos pessoais vinculados.</p></Card>
+        <Card color="amber" title="Docs pessoais"><div className="metric">{metrics.linkedDocuments}</div><p>Documentos pessoais vinculados.</p></Card>
       </div>
 
       <div className="grid two people-workspace">
         <Card title={formTitle} color={editingPerson ? 'amber' : 'teal'}>
           <form className="person-form" onSubmit={handleSubmit}>
             {editingPerson ? <p className="lead">Editando <strong>{editingPerson.name}</strong>.</p> : null}
-            <label>Nome<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex.: João Silva" /></label>
+            <label>Nome da pessoa física<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex.: João Silva" /></label>
             <div className="person-form-grid">
               <label>CPF<input value={form.cpf || ''} onChange={(event) => setForm({ ...form, cpf: event.target.value })} placeholder="000.000.000-00" /></label>
-              <label>Papel<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as PersonRole })}>{PERSON_ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></label>
+              <label>Papel no cliente/empresa<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as PersonRole })}>{PERSON_ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></label>
             </div>
             <div className="person-form-grid">
-              <label>Email<input value={form.email || ''} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="email@cliente.com" /></label>
-              <label>Telefone<input value={form.phone || ''} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="5521999999999" /></label>
+              <label>Email pessoal/profissional<input value={form.email || ''} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="email@cliente.com" /></label>
+              <label>Telefone da pessoa<input value={form.phone || ''} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="5521999999999" /></label>
             </div>
-            <label>Cliente vinculado<select value={form.clientId || ''} onChange={(event) => setForm({ ...form, clientId: event.target.value })}><option value="">Sem cliente vinculado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+            <label>Cliente/contratante vinculado<select value={form.clientId || ''} onChange={(event) => setForm({ ...form, clientId: event.target.value })}><option value="">Sem cliente vinculado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
             <div className="person-form-actions">
               <button className="person-primary-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : submitLabel}</button>
               {editingPerson ? <button className="person-secondary-button" type="button" onClick={cancelEditingPerson} disabled={saving}>Cancelar edição</button> : null}
@@ -239,20 +255,20 @@ export function PeoplePage() {
           </form>
         </Card>
 
-        <Card title="Filtros" color="slate">
+        <Card title="Filtros de pessoas físicas" color="slate">
           <div className="person-filters">
-            <label>Busca<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, CPF, email, telefone ou cliente" /></label>
+            <label>Busca<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, CPF, email, telefone, papel ou cliente" /></label>
             <label>Papel<select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as PersonRole | 'ALL')}><option value="ALL">Todos</option>{PERSON_ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></label>
-            <label>Cliente<select value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}><option value="ALL">Todos</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+            <label>Cliente/contratante<select value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}><option value="ALL">Todos</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
             <button className="person-secondary-button" type="button" onClick={() => { setSearch(''); setRoleFilter('ALL'); setClientFilter('ALL'); }}>Limpar filtros</button>
           </div>
         </Card>
       </div>
 
-      <Card title="Pessoas cadastradas" color="slate">
+      <Card title="Donos, sócios e representantes cadastrados" color="slate">
         {loading ? <p className="lead">Carregando pessoas...</p> : null}
         {!loading && filteredPeople.length === 0 ? (
-          <div className="people-empty"><strong>Nenhuma pessoa encontrada.</strong><span>Cadastre uma pessoa ou ajuste os filtros.</span></div>
+          <div className="people-empty"><strong>Nenhuma pessoa encontrada.</strong><span>Cadastre um dono, sócio, representante ou responsável, ou ajuste os filtros.</span></div>
         ) : null}
 
         {!loading && filteredPeople.length > 0 ? (
@@ -262,13 +278,14 @@ export function PeoplePage() {
                 <div className="person-card-main">
                   <div>
                     <strong>{person.name}</strong>
-                    <span>{personRoleLabels[person.role]} · {person.client?.name || 'Sem cliente vinculado'}</span>
+                    <span>{personRoleLabels[person.role]} · Cliente/contratante: {person.client?.name || 'Sem cliente vinculado'}</span>
                     <span>CPF: {formatOptional(person.cpf)} · Telefone: {formatOptional(person.phone)}</span>
                     <span>Email: {formatOptional(person.email)}</span>
+                    <span className="person-role-note">{getPersonOperationalRole(person)}</span>
                   </div>
                   <div className="person-card-meta">
                     <Badge color="teal">{personRoleLabels[person.role]}</Badge>
-                    <Badge color="amber">{countDocuments(person)} documentos</Badge>
+                    <Badge color="amber">{countDocuments(person)} docs pessoais</Badge>
                     <Badge color="violet">{countTasks(person)} tarefas</Badge>
                     <button className="person-secondary-button" type="button" onClick={() => startEditingPerson(person)} disabled={deletingPersonId === person.id}>Editar</button>
                     <button className="person-secondary-button" type="button" onClick={() => startDeletingPerson(person)} disabled={deletingPersonId === person.id}>{deletingPersonId === person.id ? 'Confirmando...' : 'Excluir'}</button>
@@ -283,7 +300,7 @@ export function PeoplePage() {
                 {deletingPersonId === person.id ? (
                   <div className="person-delete-box">
                     <strong>Tem certeza que deseja excluir esta pessoa?</strong>
-                    <span>Não será possível excluir se houver documentos ou tarefas vinculadas.</span>
+                    <span>Não será possível excluir se houver documentos pessoais ou tarefas vinculadas.</span>
                     <div className="person-form-actions">
                       <button className="person-primary-button" type="button" onClick={() => handleDeletePerson(person)}>Confirmar exclusão</button>
                       <button className="person-secondary-button" type="button" onClick={cancelDeletingPerson}>Cancelar</button>
