@@ -15,6 +15,10 @@ function normalizeOptionalText(value: unknown) {
   return trimmed || null;
 }
 
+function getRequiredName(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 const includeRelations = {
   client: true,
   documentRequests: true,
@@ -48,7 +52,7 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/people', { preHandler: authMiddleware }, async (request, reply) => {
     const { officeId } = request.user;
     const data = request.body as any;
-    const name = typeof data?.name === 'string' ? data.name.trim() : '';
+    const name = getRequiredName(data?.name);
 
     if (!name) return reply.code(400).send({ error: 'Person name is required' });
 
@@ -70,6 +74,61 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
       },
       include: includeRelations
     });
+  });
+
+  app.put('/api/people/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const { officeId } = request.user;
+    const { id } = request.params as any;
+    const data = request.body as any;
+
+    const existing = await prisma.person.findFirst({ where: { id, officeId } });
+    if (!existing) return reply.code(404).send({ error: 'Person not found' });
+
+    const clientId = data.clientId !== undefined ? data.clientId || null : existing.clientId;
+    if (clientId) {
+      const client = await prisma.client.findFirst({ where: { id: clientId, officeId } });
+      if (!client) return reply.code(400).send({ error: 'Invalid client' });
+    }
+
+    const name = data.name !== undefined ? getRequiredName(data.name) : existing.name;
+    if (!name) return reply.code(400).send({ error: 'Person name is required' });
+
+    return prisma.person.update({
+      where: { id: existing.id },
+      data: {
+        clientId,
+        name,
+        cpf: data.cpf !== undefined ? normalizeOptionalText(data.cpf) : existing.cpf,
+        email: data.email !== undefined ? normalizeOptionalText(data.email) : existing.email,
+        phone: data.phone !== undefined ? normalizeOptionalText(data.phone) : existing.phone,
+        role: data.role !== undefined ? normalizePersonRole(data.role) as any : existing.role
+      },
+      include: includeRelations
+    });
+  });
+
+  app.delete('/api/people/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const { officeId } = request.user;
+    const { id } = request.params as any;
+
+    const existing = await prisma.person.findFirst({ where: { id, officeId } });
+    if (!existing) return reply.code(404).send({ error: 'Person not found' });
+
+    const [linkedDocuments, linkedTasks] = await Promise.all([
+      prisma.documentRequest.count({ where: { personId: existing.id } }),
+      prisma.task.count({ where: { personId: existing.id } })
+    ]);
+
+    if (linkedDocuments > 0 || linkedTasks > 0) {
+      return reply.code(409).send({
+        error: 'Person has linked documents or tasks',
+        linkedDocuments,
+        linkedTasks
+      });
+    }
+
+    await prisma.person.delete({ where: { id: existing.id } });
+    return { deleted: true };
   });
 };
 
