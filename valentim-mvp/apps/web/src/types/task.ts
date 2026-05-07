@@ -62,6 +62,8 @@ export interface TaskFilters {
   source?: string;
 }
 
+export const DOCUMENT_REUPLOAD_TASK_SOURCE = 'document-review-reupload';
+
 export const TASK_STATUSES: Array<{ value: TaskStatus; label: string }> = [
   { value: 'PENDING', label: 'Pendente' },
   { value: 'IN_PROGRESS', label: 'Em andamento' },
@@ -83,6 +85,7 @@ export const TASK_PRIORITIES: Array<{ value: TaskPriority; label: string }> = [
 export const TASK_SOURCES = [
   'manual',
   'document',
+  DOCUMENT_REUPLOAD_TASK_SOURCE,
   'ai',
   'whatsapp',
   'deadline',
