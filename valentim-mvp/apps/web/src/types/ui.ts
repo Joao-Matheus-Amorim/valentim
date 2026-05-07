@@ -8,6 +8,7 @@ export type AppSectionId =
   | 'architecture'
   | 'clients'
   | 'companies'
+  | 'people'
   | 'documents'
   | 'whatsapp'
   | 'review'
