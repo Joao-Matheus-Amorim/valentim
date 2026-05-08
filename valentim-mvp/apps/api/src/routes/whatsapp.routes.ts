@@ -31,6 +31,10 @@ function isMetaWebhookPayload(body: unknown): body is { entry?: unknown[] } {
   return typeof body === 'object' && body !== null && 'entry' in body;
 }
 
+function isMetaSampleWebhookPayload(body: unknown): body is { field?: unknown; value?: unknown } {
+  return typeof body === 'object' && body !== null && 'field' in body && 'value' in body;
+}
+
 function normalizeMetaMessage(message: any): NormalizedWebhookMessage | null {
   const type = typeof message?.type === 'string' ? message.type : 'OTHER';
   const phone = typeof message?.from === 'string' ? message.from : '';
@@ -116,6 +120,21 @@ function normalizeMetaWebhookPayload(body: unknown): NormalizedWebhookMessage[] 
   return messages;
 }
 
+function normalizeMetaSampleWebhookPayload(body: unknown): NormalizedWebhookMessage[] {
+  if (!isMetaSampleWebhookPayload(body)) return [];
+
+  const field = typeof body.field === 'string' ? body.field : '';
+  const value = (body as any).value;
+
+  if (field !== 'messages' || !Array.isArray(value?.messages)) {
+    return [];
+  }
+
+  return value.messages
+    .map((message: any) => normalizeMetaMessage(message))
+    .filter((message: NormalizedWebhookMessage | null): message is NormalizedWebhookMessage => Boolean(message));
+}
+
 async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
   const office = await prisma.office.findFirst();
   if (!office) {
@@ -193,7 +212,10 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/api/webhooks/whatsapp', async (request, reply) => {
     const incoming = request.headers['x-webhook-secret'];
-    const normalizedMessages = normalizeMetaWebhookPayload(request.body);
+    const normalizedMessages = [
+      ...normalizeMetaWebhookPayload(request.body),
+      ...normalizeMetaSampleWebhookPayload(request.body)
+    ];
     const isMetaPayload = normalizedMessages.length > 0;
 
     if (!isMetaPayload && incoming !== env.WEBHOOK_SECRET) {
