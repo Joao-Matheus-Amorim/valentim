@@ -1,8 +1,8 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { analyzeDocument } from '../lib/ai';
 import { env } from '../lib/env';
+import { mediaDownloadQueue } from '../lib/queue';
 import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
 
 const webhookMessageBodySchema = z.object({
@@ -12,7 +12,9 @@ const webhookMessageBodySchema = z.object({
   body: optionalNullableString,
   mediaUrl: optionalNullableString,
   fileName: optionalNullableString,
-  mimeType: optionalNullableString
+  mimeType: optionalNullableString,
+  mediaId: optionalNullableString,
+  metaMediaId: optionalNullableString
 });
 
 const whatsappRoutes: FastifyPluginAsync = async (app) => {
@@ -30,12 +32,9 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(500).send({ error: 'Office not configured' });
     }
 
-    let client = null;
-    if (payload.phone) {
-      client = await prisma.client.findFirst({
-        where: { phone: payload.phone, officeId: office.id }
-      });
-    }
+    const client = await prisma.client.findFirst({
+      where: { phone: payload.phone, officeId: office.id }
+    });
 
     await prisma.whatsAppMessage.create({
       data: {
@@ -47,58 +46,45 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
         messageType: payload.messageType || 'TEXT',
         body: payload.body ?? null,
         mediaUrl: payload.mediaUrl ?? null,
-        mediaKey: null
+        mediaKey: payload.mediaId ?? payload.metaMediaId ?? null
       }
     });
 
     if (payload.messageType === 'DOCUMENT' && payload.fileName) {
-      const ai = analyzeDocument(payload.fileName, payload.mimeType ?? undefined);
+      const metaMediaId = payload.mediaId ?? payload.metaMediaId ?? payload.mediaUrl;
 
-      let docRequest = null;
-      if (client) {
-        docRequest = await prisma.documentRequest.findFirst({
-          where: {
-            company: { clientId: client.id },
-            documentType: ai.documentType,
-            status: 'PENDING'
-          },
-          orderBy: { createdAt: 'asc' }
-        });
+      if (!metaMediaId) {
+        return reply.code(400).send({ error: 'Document media id is required' });
       }
 
       const fileRecord = await prisma.documentFile.create({
         data: {
-          documentRequestId: docRequest?.id ?? null,
+          documentRequestId: null,
           filename: payload.fileName,
           mimeType: payload.mimeType ?? 'application/octet-stream',
           storageKey: payload.mediaUrl || ''
         }
       });
 
-      await prisma.aIAnalysis.create({
-        data: {
+      const job = await mediaDownloadQueue.add(
+        'download-and-analyze-document',
+        {
           documentFileId: fileRecord.id,
-          documentRequestId: docRequest?.id ?? null,
-          documentType: ai.documentType,
-          competence: ai.competence ?? null,
-          cnpj: ai.cnpj ?? null,
-          totalValue: ai.totalValue ?? null,
-          confidence: ai.confidence,
-          summary: ai.summary ?? null,
-          flags: ai.flags,
-          model: ai.model
+          metaMediaId,
+          filename: payload.fileName,
+          mimeType: payload.mimeType ?? 'application/octet-stream',
+          clientId: client?.id ?? null,
+          officeId: office.id
+        },
+        {
+          jobId: payload.providerMessageId ? `whatsapp:${payload.providerMessageId}` : undefined
         }
-      });
+      );
 
-      if (docRequest) {
-        await prisma.documentRequest.update({
-          where: { id: docRequest.id },
-          data: { status: 'SENT' }
-        });
-      }
+      return { received: true, queued: true, jobId: job.id, documentFileId: fileRecord.id };
     }
 
-    return { received: true };
+    return { received: true, queued: false };
   });
 };
 
