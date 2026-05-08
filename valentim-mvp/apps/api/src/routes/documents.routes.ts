@@ -1,7 +1,18 @@
 import { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 import { getIdParam } from '../lib/http';
+import { nonEmptyString, optionalNullableDateString, optionalNullableString, parseBody } from '../lib/validation';
+
+const createDocumentBodySchema = z.object({
+  companyId: z.string().uuid(),
+  documentType: nonEmptyString,
+  competence: optionalNullableString,
+  dueDate: optionalNullableDateString,
+  targetType: z.enum(['COMPANY', 'PERSON']).optional(),
+  personId: z.string().uuid().optional()
+});
 
 const documentInclude = {
   company: true,
@@ -31,25 +42,23 @@ const documentsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/api/documents', { preHandler: authMiddleware }, async (request, reply) => {
+    const body = parseBody(createDocumentBodySchema, request.body, reply);
+    if (!body) return;
+
     const { officeId } = request.user;
-    const { companyId, documentType, competence, dueDate, targetType, personId } = request.body as any;
-    const normalizedTargetType = normalizeDocumentTargetType(targetType);
-    const normalizedDocumentType = typeof documentType === 'string' ? documentType.trim() : '';
+    const normalizedTargetType = normalizeDocumentTargetType(body.targetType);
 
-    if (!companyId) return reply.code(400).send({ error: 'Company is required' });
-    if (!normalizedDocumentType) return reply.code(400).send({ error: 'Document type is required' });
-
-    const company = await prisma.company.findFirst({ where: { id: companyId, client: { officeId } } });
+    const company = await prisma.company.findFirst({ where: { id: body.companyId, client: { officeId } } });
     if (!company) return reply.code(400).send({ error: 'Invalid company' });
 
     let normalizedPersonId: string | null = null;
 
     if (normalizedTargetType === 'PERSON') {
-      if (!personId) return reply.code(400).send({ error: 'Person is required for personal document' });
+      if (!body.personId) return reply.code(400).send({ error: 'Person is required for personal document' });
 
       const person = await prisma.person.findFirst({
         where: {
-          id: personId,
+          id: body.personId,
           officeId,
           OR: [
             { clientId: company.clientId },
@@ -64,12 +73,12 @@ const documentsRoutes: FastifyPluginAsync = async (app) => {
 
     const doc = await prisma.documentRequest.create({
       data: {
-        companyId,
+        companyId: body.companyId,
         targetType: normalizedTargetType as any,
         personId: normalizedPersonId,
-        documentType: normalizedDocumentType,
-        competence: typeof competence === 'string' && competence.trim() ? competence.trim() : null,
-        dueDate: dueDate ? new Date(dueDate) : null
+        documentType: body.documentType,
+        competence: body.competence ?? null,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null
       },
       include: documentInclude
     });
