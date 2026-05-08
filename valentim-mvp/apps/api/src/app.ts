@@ -23,6 +23,25 @@ const allowedOrigins = [
 export function buildApp() {
   const app = Fastify({ logger: true });
 
+  app.setErrorHandler((error, request, reply) => {
+    request.log.error({ err: error, method: request.method, url: request.url });
+
+    const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
+    const message = statusCode >= 500 ? 'Internal server error' : error.message;
+
+    return reply.code(statusCode).send({ error: message });
+  });
+
+  app.addHook('onRequest', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+
+    if (process.env.NODE_ENV === 'production') {
+      reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+  });
+
   app.register(cors, {
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
