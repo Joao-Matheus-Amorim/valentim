@@ -7,7 +7,7 @@ export const redisConnection = new IORedis(process.env.REDIS_URL ?? 'redis://loc
   maxRetriesPerRequest: null
 });
 
-// Responsável por baixar a mídia da Meta Graph API e salvar no R2.
+// Responsável por baixar mídia recebida pelo WhatsApp e salvar no R2.
 export const mediaDownloadQueue = new Queue<MediaDownloadJobData>('media-download', {
   connection: redisConnection,
   defaultJobOptions: {
@@ -20,7 +20,8 @@ export const mediaDownloadQueue = new Queue<MediaDownloadJobData>('media-downloa
 
 export interface MediaDownloadJobData {
   documentFileId: string;
-  metaMediaId: string;
+  metaMediaId?: string | null;
+  mediaUrl?: string | null;
   filename: string;
   mimeType: string;
   clientId?: string | null;
