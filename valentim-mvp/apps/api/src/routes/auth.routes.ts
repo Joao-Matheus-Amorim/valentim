@@ -1,10 +1,17 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { comparePassword, signToken, authMiddleware } from '../lib/auth';
+import { parseBody } from '../lib/validation';
 
 const LOGIN_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+const loginBodySchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1)
+});
 
 function getLoginRateLimitKey(request: FastifyRequest) {
   return request.ip || request.headers['x-forwarded-for']?.toString() || 'unknown';
@@ -36,12 +43,14 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/auth/login', async (request, reply) => {
     if (!checkLoginRateLimit(request, reply)) return;
 
-    const { email, password } = request.body as any;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const body = parseBody(loginBodySchema, request.body, reply);
+    if (!body) return;
+
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (!user) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
-    const valid = await comparePassword(password, user.password);
+    const valid = await comparePassword(body.password, user.password);
     if (!valid) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
