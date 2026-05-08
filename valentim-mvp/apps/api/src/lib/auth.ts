@@ -3,7 +3,11 @@ import bcrypt from 'bcryptjs';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import type { AuthenticatedUser } from '../types/fastify';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required');
+}
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 10);
