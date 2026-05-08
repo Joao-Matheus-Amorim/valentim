@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 import { getIdParam } from '../lib/http';
 import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
+import { hasPaginationQuery, normalizePagination, paginationQuerySchema } from '../lib/pagination';
 
 const createClientBodySchema = z.object({
   name: nonEmptyString,
@@ -16,13 +17,37 @@ const updateClientBodySchema = z.object({
 }).refine((data) => Object.keys(data).length > 0, 'At least one field is required');
 
 const clientsRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/api/clients', { preHandler: authMiddleware }, async (request) => {
+  app.get('/api/clients', { preHandler: authMiddleware }, async (request, reply) => {
+    const query = paginationQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return reply.code(400).send({
+        error: 'Invalid query parameters',
+        issues: query.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message
+        }))
+      });
+    }
+
     const { officeId } = request.user;
-    const clients = await prisma.client.findMany({
-      where: { officeId },
-      include: { companies: true }
-    });
-    return clients;
+    const { page, limit, skip, search } = normalizePagination(query.data);
+    const where = {
+      officeId,
+      ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {})
+    };
+
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where,
+        include: { companies: true },
+        orderBy: { createdAt: 'desc' },
+        ...(hasPaginationQuery(request.query) ? { skip, take: limit } : {})
+      }),
+      hasPaginationQuery(request.query) ? prisma.client.count({ where }) : Promise.resolve(0)
+    ]);
+
+    if (!hasPaginationQuery(request.query)) return clients;
+    return { data: clients, total, page, limit };
   });
 
   app.get('/api/clients/:id', { preHandler: authMiddleware }, async (request, reply) => {
