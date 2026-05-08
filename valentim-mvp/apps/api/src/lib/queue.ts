@@ -23,4 +23,6 @@ export interface MediaDownloadJobData {
   metaMediaId: string;
   filename: string;
   mimeType: string;
+  clientId?: string | null;
+  officeId?: string | null;
 }
