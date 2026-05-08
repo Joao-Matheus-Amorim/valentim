@@ -3,6 +3,38 @@
   justify-content: space-between;
 }
 
+.documents-title h2 {
+  font-size: 0;
+}
+
+.documents-title h2::after {
+  content: "Solicitações de documentos";
+  color: #e2e8f0;
+  font-size: 1.35rem;
+}
+
+.documents-title .lead {
+  font-size: 0;
+}
+
+.documents-title .lead::after {
+  content: "Controle pedidos de documentos separados por empresa ou pessoa. O arquivo só existe quando for enviado/anexado.";
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.documents-page::before {
+  content: "Fluxo: solicitação criada → cliente envia/anexa arquivo → equipe aprova ou rejeita. Esta tela mostra pedidos; os arquivos recebidos aparecem nos cards como anexos.";
+  display: block;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 0.95rem;
+  padding: 0.78rem 0.9rem;
+  background: rgba(120, 53, 15, 0.16);
+  color: #fcd34d;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .documents-actions {
   display: flex;
   gap: 0.5rem;
@@ -329,6 +361,15 @@
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.34);
   color: #cbd5e1;
+}
+
+.document-card-main span.document-target-note {
+  width: fit-content;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 999px;
+  background: rgba(19, 78, 74, 0.2);
+  color: #99f6e4;
 }
 
 .document-card-meta {
