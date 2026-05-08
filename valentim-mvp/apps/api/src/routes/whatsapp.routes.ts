@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { env } from '../lib/env';
 import { mediaDownloadQueue } from '../lib/queue';
+import { sendWhatsAppText } from '../lib/whatsapp-meta';
 import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
 
 const webhookMessageBodySchema = z.object({
@@ -135,6 +136,17 @@ function normalizeMetaSampleWebhookPayload(body: unknown): NormalizedWebhookMess
     .filter((message: NormalizedWebhookMessage | null): message is NormalizedWebhookMessage => Boolean(message));
 }
 
+async function sendAcknowledgement(to: string, body: string) {
+  try {
+    await sendWhatsAppText({ to, body });
+    return { sent: true as const };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown WhatsApp send error';
+    console.error('[whatsapp] outbound acknowledgement failed:', message);
+    return { sent: false as const, error: message };
+  }
+}
+
 async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
   const office = await prisma.office.findFirst();
   if (!office) {
@@ -160,13 +172,18 @@ async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
   });
 
   if (payload.messageType !== 'DOCUMENT' || !payload.fileName) {
-    return { queued: false as const };
+    const acknowledgement = await sendAcknowledgement(payload.phone, 'Recebi sua mensagem.');
+    return { queued: false as const, acknowledgement };
   }
 
   const metaMediaId = payload.mediaId ?? payload.metaMediaId ?? payload.mediaUrl;
 
   if (!metaMediaId) {
-    return { queued: false as const, error: 'Document media id is required' };
+    const acknowledgement = await sendAcknowledgement(
+      payload.phone,
+      'Recebi um documento, mas nao consegui identificar o arquivo. Pode reenviar como documento PDF?'
+    );
+    return { queued: false as const, error: 'Document media id is required', acknowledgement };
   }
 
   const fileRecord = await prisma.documentFile.create({
@@ -193,7 +210,12 @@ async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
     }
   );
 
-  return { queued: true as const, jobId: job.id, documentFileId: fileRecord.id };
+  const acknowledgement = await sendAcknowledgement(
+    payload.phone,
+    'Documento recebido. Vou analisar e encaminhar para o escritorio.'
+  );
+
+  return { queued: true as const, jobId: job.id, documentFileId: fileRecord.id, acknowledgement };
 }
 
 const whatsappRoutes: FastifyPluginAsync = async (app) => {
