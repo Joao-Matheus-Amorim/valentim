@@ -1,17 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { analyzeDocument } from '../lib/ai';
-
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+import { env } from '../lib/env';
 
 const whatsappRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/webhooks/whatsapp', async (request, reply) => {
-    // Valida WEBHOOK_SECRET se configurado no .env
-    if (WEBHOOK_SECRET) {
-      const incoming = request.headers['x-webhook-secret'];
-      if (incoming !== WEBHOOK_SECRET) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
+    const incoming = request.headers['x-webhook-secret'];
+    if (incoming !== env.WEBHOOK_SECRET) {
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
 
     const payload = request.body as any;
