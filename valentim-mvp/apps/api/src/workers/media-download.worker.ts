@@ -4,10 +4,6 @@ import { prisma } from '../lib/prisma';
 import { analyzeDocument } from '../lib/ai';
 import { redisConnection, MediaDownloadJobData } from '../lib/queue';
 
-// ---------------------------------------------------------------------------
-// Cloudflare R2 (compatível com S3)
-// ---------------------------------------------------------------------------
-
 const r2 = new S3Client({
   region: 'auto',
   endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -18,11 +14,6 @@ const r2 = new S3Client({
 });
 
 const R2_BUCKET = process.env.R2_BUCKET ?? 'valentim-docs';
-
-// ---------------------------------------------------------------------------
-// Meta Graph API
-// ---------------------------------------------------------------------------
-
 const META_API_VERSION = process.env.META_API_VERSION ?? 'v19.0';
 const META_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
@@ -36,10 +27,7 @@ interface MetaMediaInfo {
 
 async function fetchMetaMediaUrl(mediaId: string): Promise<MetaMediaInfo> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
-
-  if (!token) {
-    throw new Error('WHATSAPP_ACCESS_TOKEN não configurado');
-  }
+  if (!token) throw new Error('WHATSAPP_ACCESS_TOKEN não configurado');
 
   const res = await fetch(`${META_BASE_URL}/${mediaId}`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -47,7 +35,7 @@ async function fetchMetaMediaUrl(mediaId: string): Promise<MetaMediaInfo> {
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Meta API erro ao buscar media info: ${res.status} — ${body}`);
+    throw new Error(`Meta API erro ao buscar media info: ${res.status} - ${body}`);
   }
 
   return res.json() as Promise<MetaMediaInfo>;
@@ -55,10 +43,7 @@ async function fetchMetaMediaUrl(mediaId: string): Promise<MetaMediaInfo> {
 
 async function downloadMetaMedia(url: string): Promise<{ buffer: Buffer; contentType: string }> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
-
-  if (!token) {
-    throw new Error('WHATSAPP_ACCESS_TOKEN não configurado');
-  }
+  if (!token) throw new Error('WHATSAPP_ACCESS_TOKEN não configurado');
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` }
@@ -66,18 +51,44 @@ async function downloadMetaMedia(url: string): Promise<{ buffer: Buffer; content
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Falha ao baixar mídia da Meta: ${res.status} — ${body}`);
+    throw new Error(`Falha ao baixar mídia da Meta: ${res.status} - ${body}`);
   }
 
   const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
   const arrayBuffer = await res.arrayBuffer();
-
   return { buffer: Buffer.from(arrayBuffer), contentType };
 }
 
-// ---------------------------------------------------------------------------
-// Upload para o Cloudflare R2
-// ---------------------------------------------------------------------------
+async function downloadDirectMedia(url: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Falha ao baixar mídia por URL direta: ${res.status} - ${body}`);
+  }
+
+  const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+  const arrayBuffer = await res.arrayBuffer();
+  return { buffer: Buffer.from(arrayBuffer), contentType };
+}
+
+async function resolveAndDownloadMedia(job: Job<MediaDownloadJobData>) {
+  const { metaMediaId, mediaUrl } = job.data;
+
+  if (mediaUrl) {
+    job.log('Baixando mídia via URL direta do provedor');
+    return downloadDirectMedia(mediaUrl);
+  }
+
+  if (!metaMediaId) {
+    throw new Error('Job sem metaMediaId e sem mediaUrl');
+  }
+
+  job.log(`Iniciando download via Meta Graph API - media ID: ${metaMediaId}`);
+  const mediaInfo = await fetchMetaMediaUrl(metaMediaId);
+  job.log(`URL temporária obtida - tamanho: ${mediaInfo.file_size} bytes`);
+  return downloadMetaMedia(mediaInfo.url);
+}
 
 async function uploadToR2(key: string, buffer: Buffer, contentType: string): Promise<string> {
   await r2.send(
@@ -90,17 +101,9 @@ async function uploadToR2(key: string, buffer: Buffer, contentType: string): Pro
   );
 
   const publicUrl = process.env.R2_PUBLIC_URL;
-
-  if (publicUrl) {
-    return `${publicUrl.replace(/\/$/, '')}/${key}`;
-  }
-
+  if (publicUrl) return `${publicUrl.replace(/\/$/, '')}/${key}`;
   return `r2://${R2_BUCKET}/${key}`;
 }
-
-// ---------------------------------------------------------------------------
-// Persistência da análise real
-// ---------------------------------------------------------------------------
 
 async function matchPendingDocumentRequest(input: {
   documentFileId: string;
@@ -112,13 +115,8 @@ async function matchPendingDocumentRequest(input: {
     select: { documentRequestId: true }
   });
 
-  if (file?.documentRequestId) {
-    return file.documentRequestId;
-  }
-
-  if (!input.clientId) {
-    return null;
-  }
+  if (file?.documentRequestId) return file.documentRequestId;
+  if (!input.clientId) return null;
 
   const request = await prisma.documentRequest.findFirst({
     where: {
@@ -129,9 +127,7 @@ async function matchPendingDocumentRequest(input: {
     orderBy: { createdAt: 'asc' }
   });
 
-  if (!request) {
-    return null;
-  }
+  if (!request) return null;
 
   await prisma.documentFile.update({
     where: { id: input.documentFileId },
@@ -170,14 +166,8 @@ async function upsertAiAnalysisFromResult(
     model: result.model
   };
 
-  if (existing) {
-    await prisma.aIAnalysis.update({
-      where: { id: existing.id },
-      data
-    });
-  } else {
-    await prisma.aIAnalysis.create({ data });
-  }
+  if (existing) await prisma.aIAnalysis.update({ where: { id: existing.id }, data });
+  else await prisma.aIAnalysis.create({ data });
 
   if (documentRequestId) {
     await prisma.documentRequest.update({
@@ -186,10 +176,6 @@ async function upsertAiAnalysisFromResult(
     });
   }
 }
-
-// ---------------------------------------------------------------------------
-// Worker
-// ---------------------------------------------------------------------------
 
 function safeFileName(filename: string): string {
   return filename
@@ -204,28 +190,23 @@ function buildStorageKey(documentFileId: string, filename: string): string {
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
-
   return `documents/${year}/${month}/${documentFileId}/${safeFileName(filename)}`;
 }
 
 async function processMediaDownload(job: Job<MediaDownloadJobData>) {
-  const { documentFileId, metaMediaId, filename, mimeType, clientId } = job.data;
+  const { documentFileId, filename, mimeType, clientId } = job.data;
 
-  job.log(`Iniciando download — media ID: ${metaMediaId}`);
-
-  await job.updateProgress(10);
-  const mediaInfo = await fetchMetaMediaUrl(metaMediaId);
-  job.log(`URL temporária obtida — tamanho: ${mediaInfo.file_size} bytes`);
+  job.log(`Iniciando processamento de mídia - documentFileId: ${documentFileId}`);
 
   await job.updateProgress(30);
-  const { buffer, contentType } = await downloadMetaMedia(mediaInfo.url);
-  job.log(`Arquivo baixado — ${buffer.length} bytes`);
+  const { buffer, contentType } = await resolveAndDownloadMedia(job);
+  job.log(`Arquivo baixado - ${buffer.length} bytes`);
 
   await job.updateProgress(55);
   const storageKey = buildStorageKey(documentFileId, filename);
   const finalContentType = contentType || mimeType;
   const storageUrl = await uploadToR2(storageKey, buffer, finalContentType);
-  job.log(`Upload concluído — chave: ${storageKey}`);
+  job.log(`Upload concluído - chave: ${storageKey}`);
 
   await job.updateProgress(70);
   await prisma.documentFile.update({
@@ -236,7 +217,7 @@ async function processMediaDownload(job: Job<MediaDownloadJobData>) {
   await job.updateProgress(82);
   const aiResult = await analyzeDocument(buffer, finalContentType, filename);
   await upsertAiAnalysisFromResult(documentFileId, aiResult, clientId);
-  job.log(`Análise IA concluída — ${aiResult.model} / confiança ${aiResult.confidence}`);
+  job.log(`Análise IA concluída - ${aiResult.model} / confiança ${aiResult.confidence}`);
 
   await job.updateProgress(100);
   job.log(`DocumentFile ${documentFileId} atualizado com storage permanente e análise real`);
@@ -251,9 +232,7 @@ export function startMediaDownloadWorker() {
   });
 
   worker.on('completed', (job, result) => {
-    console.log(
-      `[media-worker] Job ${job.id} concluído — ${result.bytes} bytes → ${result.storageKey} | IA ${result.aiModel} (${result.confidence})`
-    );
+    console.log(`[media-worker] Job ${job.id} concluído - ${result.bytes} bytes -> ${result.storageKey} | IA ${result.aiModel} (${result.confidence})`);
   });
 
   worker.on('failed', (job, err) => {
@@ -265,6 +244,5 @@ export function startMediaDownloadWorker() {
   });
 
   console.log('[media-worker] Worker de download de mídia iniciado');
-
   return worker;
 }
