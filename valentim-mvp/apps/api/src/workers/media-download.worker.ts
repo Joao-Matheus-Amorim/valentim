@@ -75,6 +75,39 @@ async function downloadMetaMedia(url: string): Promise<{ buffer: Buffer; content
   return { buffer: Buffer.from(arrayBuffer), contentType };
 }
 
+async function downloadDirectMedia(url: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Falha ao baixar mídia por URL direta: ${res.status} — ${body}`);
+  }
+
+  const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+  const arrayBuffer = await res.arrayBuffer();
+
+  return { buffer: Buffer.from(arrayBuffer), contentType };
+}
+
+async function resolveAndDownloadMedia(job: Job<MediaDownloadJobData>) {
+  const { metaMediaId, mediaUrl } = job.data;
+
+  if (mediaUrl) {
+    job.log('Baixando mídia via URL direta do provedor');
+    return downloadDirectMedia(mediaUrl);
+  }
+
+  if (!metaMediaId) {
+    throw new Error('Job sem metaMediaId e sem mediaUrl');
+  }
+
+  job.log(`Iniciando download via Meta Graph API — media ID: ${metaMediaId}`);
+  const mediaInfo = await fetchMetaMediaUrl(metaMediaId);
+  job.log(`URL temporária obtida — tamanho: ${mediaInfo.file_size} bytes`);
+
+  return downloadMetaMedia(mediaInfo.url);
+}
+
 // ---------------------------------------------------------------------------
 // Upload para o Cloudflare R2
 // ---------------------------------------------------------------------------
@@ -209,16 +242,12 @@ function buildStorageKey(documentFileId: string, filename: string): string {
 }
 
 async function processMediaDownload(job: Job<MediaDownloadJobData>) {
-  const { documentFileId, metaMediaId, filename, mimeType, clientId } = job.data;
+  const { documentFileId, filename, mimeType, clientId } = job.data;
 
-  job.log(`Iniciando download — media ID: ${metaMediaId}`);
-
-  await job.updateProgress(10);
-  const mediaInfo = await fetchMetaMediaUrl(metaMediaId);
-  job.log(`URL temporária obtida — tamanho: ${mediaInfo.file_size} bytes`);
+  job.log(`Iniciando processamento de mídia — documentFileId: ${documentFileId}`);
 
   await job.updateProgress(30);
-  const { buffer, contentType } = await downloadMetaMedia(mediaInfo.url);
+  const { buffer, contentType } = await resolveAndDownloadMedia(job);
   job.log(`Arquivo baixado — ${buffer.length} bytes`);
 
   await job.updateProgress(55);
