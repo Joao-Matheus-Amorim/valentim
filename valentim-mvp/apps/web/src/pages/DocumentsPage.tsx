@@ -8,7 +8,7 @@ import type { Company } from '../types/company';
 import type { CreateDocumentInput, DocumentRequest, DocumentStatus, DocumentTargetType } from '../types/document';
 import type { Person } from '../types/person';
 import { personRoleLabels } from '../types/person';
-import './DocumentsPage.css';
+import  './DocumentsPage.css';
 
 const statusLabels: Record<DocumentStatus, string> = {
   PENDING: 'Pendente',

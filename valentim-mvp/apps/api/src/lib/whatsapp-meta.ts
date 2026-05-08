@@ -6,14 +6,14 @@ export async function sendWhatsAppText(input: { to: string; body: string }) {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token) {
-    throw new Error('WHATSAPP_ACCESS_TOKEN is not configured');
+    throw new Error('WHATSAPP_ACCESS_TOKEN não configurado');
   }
 
   if (!phoneNumberId) {
-    throw new Error('WHATSAPP_PHONE_NUMBER_ID is not configured');
+    throw new Error('WHATSAPP_PHONE_NUMBER_ID não configurado');
   }
 
-  const response = await fetch(`${META_BASE_URL}/${phoneNumberId}/messages`, {
+  const res = await fetch(`${META_BASE_URL}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -31,10 +31,10 @@ export async function sendWhatsAppText(input: { to: string; body: string }) {
     })
   });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`WhatsApp send failed: ${response.status} - ${body}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Erro ao enviar WhatsApp: ${res.status} — ${body}`);
   }
 
-  return response.json();
+  return res.json();
 }
