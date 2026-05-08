@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
+import { getIdParam } from '../lib/http';
 
 const personRoles = ['OWNER', 'PARTNER', 'LEGAL_REPRESENTATIVE', 'RESPONSIBLE', 'CONTACT', 'OTHER'];
 
@@ -42,8 +43,10 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/api/people/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const person = await prisma.person.findFirst({ where: { id, officeId }, include: includeRelations });
     if (!person) return reply.code(404).send({ error: 'Person not found' });
     return person;
@@ -77,8 +80,10 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put('/api/people/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const data = request.body as any;
 
     const existing = await prisma.person.findFirst({ where: { id, officeId } });
@@ -108,9 +113,10 @@ const peopleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete('/api/people/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = request.user;
-    const { id } = request.params as any;
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
 
+    const { officeId } = request.user;
     const existing = await prisma.person.findFirst({ where: { id, officeId } });
     if (!existing) return reply.code(404).send({ error: 'Person not found' });
 
