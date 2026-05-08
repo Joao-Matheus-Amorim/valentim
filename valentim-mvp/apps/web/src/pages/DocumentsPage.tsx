@@ -3,8 +3,11 @@ import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
 import { listCompanies } from '../services/companies';
 import { createDocument, listDocuments, reviewDocument } from '../services/documents';
+import { listPeople } from '../services/people';
 import type { Company } from '../types/company';
-import type { CreateDocumentInput, DocumentRequest, DocumentStatus } from '../types/document';
+import type { CreateDocumentInput, DocumentRequest, DocumentStatus, DocumentTargetType } from '../types/document';
+import type { Person } from '../types/person';
+import { personRoleLabels } from '../types/person';
 import './DocumentsPage.css';
 
 const statusLabels: Record<DocumentStatus, string> = {
@@ -17,8 +20,9 @@ const statusLabels: Record<DocumentStatus, string> = {
 };
 
 type DocumentFilter = 'all' | 'pending' | 'sent' | 'approved' | 'rejected';
+type DocumentTargetFilter = 'all' | 'company' | 'person';
 type DocumentSort = 'dueDateAsc' | 'newest' | 'oldest' | 'typeAsc';
-type DocumentDueDateSignal = { label: string; color: 'slate' | 'green' | 'amber' | 'rose' };
+type DueSignal = { label: string; color: 'slate' | 'green' | 'amber' | 'rose' };
 type DocumentUrgencyFilter = 'dueToday' | 'nextSevenDays' | 'overdue' | 'rejected';
 
 const ALL_COMPANIES_FILTER = 'all';
@@ -33,6 +37,12 @@ const documentFilterOptions: Array<{ id: DocumentFilter; label: string }> = [
   { id: 'rejected', label: 'Rejeitados / reenvio' }
 ];
 
+const documentTargetFilterOptions: Array<{ id: DocumentTargetFilter; label: string }> = [
+  { id: 'all', label: 'Todos os alvos' },
+  { id: 'company', label: 'Empresas' },
+  { id: 'person', label: 'Pessoas' }
+];
+
 const documentSortOptions: Array<{ id: DocumentSort; label: string }> = [
   { id: 'dueDateAsc', label: 'Vencimento mais próximo' },
   { id: 'newest', label: 'Mais recentes' },
@@ -40,10 +50,25 @@ const documentSortOptions: Array<{ id: DocumentSort; label: string }> = [
   { id: 'typeAsc', label: 'Tipo A-Z' }
 ];
 
-const documentTypeOptions = ['DAS', 'DARF', 'NF', 'EXTRATO', 'FOLHA', 'OUTRO'];
+const documentTypeOptions = [
+  'DAS',
+  'DARF',
+  'NF',
+  'EXTRATO',
+  'FOLHA',
+  'OUTRO',
+  'CPF',
+  'RG',
+  'CNH',
+  'COMPROVANTE_RESIDENCIA',
+  'PROCURACAO',
+  'E-CPF'
+];
 
 const initialDocumentForm: CreateDocumentInput = {
   companyId: '',
+  targetType: 'COMPANY',
+  personId: '',
   documentType: '',
   competence: '',
   dueDate: ''
@@ -63,22 +88,6 @@ function getTimeValue(date?: string | null, fallback = Number.MAX_SAFE_INTEGER) 
   return Number.isNaN(timestamp) ? fallback : timestamp;
 }
 
-function getStartOfDay(date: Date) {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-}
-
-function getDueDateDiffDays(date?: string | null) {
-  if (!date) return null;
-  const timestamp = new Date(date).getTime();
-  if (Number.isNaN(timestamp)) return null;
-
-  const today = getStartOfDay(new Date());
-  const dueDate = getStartOfDay(new Date(date));
-  return Math.round((dueDate.getTime() - today.getTime()) / DAY_IN_MS);
-}
-
 function formatDate(date?: string | null) {
   if (!date) return 'Sem vencimento';
   return new Date(date).toLocaleDateString('pt-BR');
@@ -88,6 +97,7 @@ function formatDateTime(date?: string | null) {
   if (!date) return null;
   const value = new Date(date);
   if (Number.isNaN(value.getTime())) return null;
+
   return value.toLocaleString('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -95,39 +105,41 @@ function formatDateTime(date?: string | null) {
   });
 }
 
-function getDocumentDueDateSignal(document: DocumentRequest): DocumentDueDateSignal {
-  if (document.status === 'APPROVED') {
-    return { label: 'Conferido', color: 'green' };
-  }
+function getDueDateDiffDays(date?: string | null) {
+  if (!date) return null;
+  const due = new Date(date);
+  if (Number.isNaN(due.getTime())) return null;
 
-  if (document.status === 'REJECTED') {
-    return { label: 'Aguardando reenvio', color: 'rose' };
-  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  return Math.round((due.getTime() - today.getTime()) / DAY_IN_MS);
+}
+
+function getDocumentDueDateSignal(document: DocumentRequest): DueSignal {
+  if (document.status === 'APPROVED') return { label: 'Conferido', color: 'green' };
+  if (document.status === 'REJECTED') return { label: 'Aguardando reenvio', color: 'rose' };
 
   const diffDays = getDueDateDiffDays(document.dueDate);
 
-  if (diffDays === null) {
-    return { label: 'Sem vencimento', color: 'slate' };
-  }
+  if (diffDays === null) return { label: 'Sem vencimento', color: 'slate' };
 
   if (diffDays < 0) {
     const daysLate = Math.abs(diffDays);
-    return { label: daysLate === 1 ? 'Atrasado há 1 dia' : `Atrasado há ${daysLate} dias`, color: 'rose' };
+    return {
+      label: daysLate === 1 ? 'Atrasado há 1 dia' : `Atrasado há ${daysLate} dias`,
+      color: 'rose'
+    };
   }
 
-  if (diffDays === 0) {
-    return { label: 'Vence hoje', color: 'amber' };
-  }
+  if (diffDays === 0) return { label: 'Vence hoje', color: 'amber' };
+  if (diffDays === 1) return { label: 'Vence amanhã', color: 'amber' };
 
-  if (diffDays === 1) {
-    return { label: 'Vence amanhã', color: 'amber' };
-  }
-
-  if (diffDays <= 7) {
-    return { label: `Vence em ${diffDays} dias`, color: 'amber' };
-  }
-
-  return { label: `Vence em ${diffDays} dias`, color: 'slate' };
+  return {
+    label: `Vence em ${diffDays} dias`,
+    color: diffDays <= 7 ? 'amber' : 'slate'
+  };
 }
 
 function getStatusBadgeColor(status: DocumentStatus) {
@@ -159,9 +171,28 @@ function getReviewHistoryLabel(document: DocumentRequest) {
   const reviewerName = getReviewerName(document);
   const reviewerSuffix = reviewerName ? ` por ${reviewerName}` : '';
 
-  if (document.status === 'APPROVED') return `Aprovado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
-  if (document.status === 'REJECTED') return `Rejeitado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
+  if (document.status === 'APPROVED') {
+    return `Aprovado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
+  }
+
+  if (document.status === 'REJECTED') {
+    return `Rejeitado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
+  }
+
   return `Revisado em ${reviewedAt} (Brasília)${reviewerSuffix}`;
+}
+
+function getDocumentTargetLabel(document: DocumentRequest) {
+  if (document.targetType === 'PERSON') {
+    const role =
+      document.person?.role && personRoleLabels[document.person.role as keyof typeof personRoleLabels]
+        ? personRoleLabels[document.person.role as keyof typeof personRoleLabels]
+        : 'Pessoa';
+
+    return `Documento da pessoa: ${document.person?.name || 'Pessoa não informada'} · ${role}`;
+  }
+
+  return `Documento da empresa: ${document.company?.name || 'Empresa não informada'}`;
 }
 
 function matchesDocumentFilter(document: DocumentRequest, filter: DocumentFilter) {
@@ -176,41 +207,46 @@ function matchesCompanyFilter(document: DocumentRequest, companyFilter: string) 
   return companyFilter === ALL_COMPANIES_FILTER || document.companyId === companyFilter;
 }
 
+function matchesTargetFilter(document: DocumentRequest, targetFilter: DocumentTargetFilter) {
+  if (targetFilter === 'all') return true;
+  if (targetFilter === 'person') return document.targetType === 'PERSON';
+  return document.targetType !== 'PERSON';
+}
+
 function matchesDocumentSearch(document: DocumentRequest, search: string) {
   const normalizedSearch = normalizeSearchValue(search);
   if (!normalizedSearch) return true;
 
   const dueDateSignal = getDocumentDueDateSignal(document);
+
   const searchableText = [
     document.documentType,
     document.company?.name,
+    document.person?.name,
+    document.person?.cpf,
+    document.targetType === 'PERSON' ? 'documento da pessoa' : 'documento da empresa',
     document.competence,
     document.dueDate ? formatDate(document.dueDate) : null,
     statusLabels[document.status],
     dueDateSignal.label,
     getReviewHistoryLabel(document),
     document.rejectionReason
-  ].map(normalizeSearchValue).join(' ');
+  ]
+    .map(normalizeSearchValue)
+    .join(' ');
 
   return searchableText.includes(normalizedSearch);
 }
 
 function sortDocuments(documents: DocumentRequest[], sort: DocumentSort) {
   return [...documents].sort((a, b) => {
-    if (sort === 'newest') {
-      return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
-    }
-
-    if (sort === 'oldest') {
-      return getTimeValue(a.createdAt, 0) - getTimeValue(b.createdAt, 0);
-    }
-
-    if (sort === 'typeAsc') {
-      return a.documentType.localeCompare(b.documentType, 'pt-BR');
-    }
+    if (sort === 'newest') return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
+    if (sort === 'oldest') return getTimeValue(a.createdAt, 0) - getTimeValue(b.createdAt, 0);
+    if (sort === 'typeAsc') return a.documentType.localeCompare(b.documentType, 'pt-BR');
 
     const dueDateDiff = getTimeValue(a.dueDate) - getTimeValue(b.dueDate);
     if (dueDateDiff !== 0) return dueDateDiff;
+
     return getTimeValue(b.createdAt, 0) - getTimeValue(a.createdAt, 0);
   });
 }
@@ -244,8 +280,10 @@ function countOverdue(documents: DocumentRequest[]) {
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRequest[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [documentForm, setDocumentForm] = useState<CreateDocumentInput>(initialDocumentForm);
   const [activeDocumentFilter, setActiveDocumentFilter] = useState<DocumentFilter>('all');
+  const [activeTargetFilter, setActiveTargetFilter] = useState<DocumentTargetFilter>('all');
   const [activeCompanyFilter, setActiveCompanyFilter] = useState<string>(ALL_COMPANIES_FILTER);
   const [documentSearch, setDocumentSearch] = useState('');
   const [documentSort, setDocumentSort] = useState<DocumentSort>('dueDateAsc');
@@ -258,17 +296,29 @@ export function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const selectedCompany = useMemo(() => {
+    return companies.find((company) => company.id === documentForm.companyId) || null;
+  }, [companies, documentForm.companyId]);
+
+  const availablePeopleForSelectedCompany = useMemo(() => {
+    if (!selectedCompany) return people;
+    return people.filter((person) => !person.clientId || person.clientId === selectedCompany.clientId);
+  }, [people, selectedCompany]);
+
   async function loadDocuments() {
     setLoading(true);
     setError(null);
 
     try {
-      const [documentsData, companiesData] = await Promise.all([
+      const [documentsData, companiesData, peopleData] = await Promise.all([
         listDocuments(),
-        listCompanies()
+        listCompanies(),
+        listPeople()
       ]);
+
       setDocuments(documentsData);
       setCompanies(companiesData);
+      setPeople(peopleData);
     } catch (err) {
       setError('Não foi possível carregar os documentos. Verifique API/token.');
     } finally {
@@ -299,29 +349,40 @@ export function DocumentsPage() {
     return documents.filter((document) => matchesCompanyFilter(document, activeCompanyFilter));
   }, [activeCompanyFilter, documents]);
 
+  const targetFilteredDocuments = useMemo(() => {
+    return companyFilteredDocuments.filter((document) => matchesTargetFilter(document, activeTargetFilter));
+  }, [activeTargetFilter, companyFilteredDocuments]);
+
+  const targetCounts = useMemo(() => {
+    return documentTargetFilterOptions.reduce<Record<DocumentTargetFilter, number>>((acc, option) => {
+      acc[option.id] = companyFilteredDocuments.filter((document) => matchesTargetFilter(document, option.id)).length;
+      return acc;
+    }, { all: 0, company: 0, person: 0 });
+  }, [companyFilteredDocuments]);
+
   const urgencyMetrics = useMemo(() => {
     return {
-      dueToday: countDueToday(companyFilteredDocuments),
-      nextSevenDays: countNextSevenDays(companyFilteredDocuments),
-      overdue: countOverdue(companyFilteredDocuments),
-      rejected: companyFilteredDocuments.filter((document) => document.status === 'REJECTED').length
+      dueToday: countDueToday(targetFilteredDocuments),
+      nextSevenDays: countNextSevenDays(targetFilteredDocuments),
+      overdue: countOverdue(targetFilteredDocuments),
+      rejected: targetFilteredDocuments.filter((document) => document.status === 'REJECTED').length
     };
-  }, [companyFilteredDocuments]);
+  }, [targetFilteredDocuments]);
 
   const filterCounts = useMemo(() => {
     return documentFilterOptions.reduce<Record<DocumentFilter, number>>((acc, option) => {
-      acc[option.id] = companyFilteredDocuments.filter((document) => matchesDocumentFilter(document, option.id)).length;
+      acc[option.id] = targetFilteredDocuments.filter((document) => matchesDocumentFilter(document, option.id)).length;
       return acc;
     }, { all: 0, pending: 0, sent: 0, approved: 0, rejected: 0 });
-  }, [companyFilteredDocuments]);
+  }, [targetFilteredDocuments]);
 
   const filteredDocuments = useMemo(() => {
-    const result = companyFilteredDocuments
+    const result = targetFilteredDocuments
       .filter((document) => matchesDocumentFilter(document, activeDocumentFilter))
       .filter((document) => matchesDocumentSearch(document, documentSearch));
 
     return sortDocuments(result, documentSort);
-  }, [activeDocumentFilter, companyFilteredDocuments, documentSearch, documentSort]);
+  }, [activeDocumentFilter, targetFilteredDocuments, documentSearch, documentSort]);
 
   function applyUrgencyFilter(filter: DocumentUrgencyFilter) {
     setDocumentSearch('');
@@ -348,16 +409,31 @@ export function DocumentsPage() {
     setDocumentSearch('vence em');
   }
 
+  function updateDocumentTargetType(targetType: DocumentTargetType) {
+    setDocumentForm({
+      ...documentForm,
+      targetType,
+      personId: targetType === 'PERSON' ? documentForm.personId || '' : ''
+    });
+  }
+
   async function handleDocumentFormSubmit(event: FormEvent) {
     event.preventDefault();
 
     const companyId = documentForm.companyId;
+    const targetType = documentForm.targetType || 'COMPANY';
+    const personId = targetType === 'PERSON' ? documentForm.personId || null : null;
     const documentType = documentForm.documentType.trim();
     const competence = documentForm.competence?.trim() || null;
     const dueDate = documentForm.dueDate || null;
 
     if (!companyId) {
       setError('Selecione a empresa da solicitação.');
+      return;
+    }
+
+    if (targetType === 'PERSON' && !personId) {
+      setError('Selecione a pessoa dona deste documento.');
       return;
     }
 
@@ -371,13 +447,20 @@ export function DocumentsPage() {
     setSuccess(null);
 
     try {
-      await createDocument({ companyId, documentType, competence, dueDate });
+      await createDocument({ companyId, targetType, personId, documentType, competence, dueDate });
+
       setDocumentForm(initialDocumentForm);
       setActiveCompanyFilter(companyId);
       setActiveDocumentFilter('pending');
+      setActiveTargetFilter(targetType === 'PERSON' ? 'person' : 'company');
       setDocumentSearch('');
       setDocumentSort('dueDateAsc');
-      setSuccess('Solicitação criada com sucesso.');
+      setSuccess(
+        targetType === 'PERSON'
+          ? 'Solicitação de documento pessoal criada com sucesso.'
+          : 'Solicitação de documento da empresa criada com sucesso.'
+      );
+
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -423,6 +506,7 @@ export function DocumentsPage() {
 
   function clearDocumentFilters() {
     setActiveCompanyFilter(ALL_COMPANIES_FILTER);
+    setActiveTargetFilter('all');
     setActiveDocumentFilter('all');
     setDocumentSearch('');
     setDocumentSort('dueDateAsc');
@@ -447,13 +531,16 @@ export function DocumentsPage() {
 
     try {
       await reviewDocument(rejectingDocument.id, { action: 'reject', reason });
+
       setSuccess('Documento rejeitado com motivo registrado.');
       setRejectingDocument(null);
       setRejectionReason('');
       setActiveCompanyFilter(rejectingDocument.companyId);
+      setActiveTargetFilter(rejectingDocument.targetType === 'PERSON' ? 'person' : 'company');
       setActiveDocumentFilter('rejected');
       setDocumentSearch('');
       setDocumentSort('newest');
+
       window.setTimeout(() => setSuccess(null), 3000);
       await loadDocuments();
     } catch (err) {
@@ -468,7 +555,7 @@ export function DocumentsPage() {
       <div className="page-title documents-title">
         <div>
           <h2>Documentos</h2>
-          <p className="lead">Solicitações de documentos organizadas por empresa, competência e status.</p>
+          <p className="lead">Solicitações organizadas por empresa, pessoa física, competência e status.</p>
         </div>
         <div className="documents-actions">
           <Badge color="amber">Fila</Badge>
@@ -513,18 +600,45 @@ export function DocumentsPage() {
         <Card title="Criar solicitação" color="amber">
           <form className="document-form" onSubmit={handleDocumentFormSubmit}>
             <label>
-              Empresa
+              Empresa vinculada
               <select
                 value={documentForm.companyId}
-                onChange={(event) => setDocumentForm({ ...documentForm, companyId: event.target.value })}
+                onChange={(event) => setDocumentForm({ ...documentForm, companyId: event.target.value, personId: '' })}
                 disabled={loading || saving || companies.length === 0}
               >
                 <option value="">Selecione uma empresa</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>{company.name}</option>
-                ))}
+                {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
               </select>
             </label>
+
+            <label>
+              Alvo do documento
+              <select
+                value={documentForm.targetType || 'COMPANY'}
+                onChange={(event) => updateDocumentTargetType(event.target.value as DocumentTargetType)}
+                disabled={saving}
+              >
+                <option value="COMPANY">Documento da empresa</option>
+                <option value="PERSON">Documento da pessoa / dono / representante</option>
+              </select>
+            </label>
+
+            {(documentForm.targetType || 'COMPANY') === 'PERSON' ? (
+              <label>
+                Pessoa vinculada
+                <select
+                  value={documentForm.personId || ''}
+                  onChange={(event) => setDocumentForm({ ...documentForm, personId: event.target.value })}
+                  disabled={saving || !documentForm.companyId}
+                >
+                  <option value="">Selecione a pessoa</option>
+                  {availablePeopleForSelectedCompany.map((person) => (
+                    <option key={person.id} value={person.id}>{person.name} · {personRoleLabels[person.role]}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
             <label>
               Tipo de documento
               <select
@@ -533,11 +647,10 @@ export function DocumentsPage() {
                 disabled={loading || saving}
               >
                 <option value="">Selecione o tipo</option>
-                {documentTypeOptions.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
+                {documentTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
             </label>
+
             <label>
               Competência
               <input
@@ -547,6 +660,7 @@ export function DocumentsPage() {
                 disabled={saving}
               />
             </label>
+
             <label>
               Vencimento
               <input
@@ -556,6 +670,7 @@ export function DocumentsPage() {
                 disabled={saving}
               />
             </label>
+
             <button className="document-primary-button" type="submit" disabled={loading || saving || companies.length === 0}>
               {saving ? 'Criando...' : 'Criar solicitação'}
             </button>
@@ -564,15 +679,15 @@ export function DocumentsPage() {
 
         <Card title="Como usar" color="slate">
           <div className="document-help-box">
-            <strong>Documento sempre pertence a uma empresa.</strong>
-            <span>Crie solicitações mensais para acompanhar o que o cliente precisa enviar.</span>
-            <span>Use as abas, o filtro de empresa, a busca e a ordenação para organizar a fila operacional.</span>
+            <strong>Documento pode ser da empresa ou da pessoa.</strong>
+            <span>Use documento da empresa para CNPJ, DAS, extratos e obrigações do negócio.</span>
+            <span>Use documento da pessoa para CPF, RG, CNH, procuração, e-CPF, sócios e representantes legais.</span>
           </div>
         </Card>
       </div>
 
       <Card title="Fila de documentos" color="slate">
-        {loading ? <p className="lead">Carregando documentos e empresas...</p> : null}
+        {loading ? <p className="lead">Carregando documentos, empresas e pessoas...</p> : null}
 
         {!loading && companies.length === 0 ? (
           <div className="documents-empty">
@@ -588,30 +703,43 @@ export function DocumentsPage() {
                 Empresa
                 <select value={activeCompanyFilter} onChange={(event) => setActiveCompanyFilter(event.target.value)}>
                   <option value={ALL_COMPANIES_FILTER}>Todas as empresas</option>
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>{company.name}</option>
-                  ))}
+                  {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
                 </select>
               </label>
+
               <label>
                 Busca rápida
                 <input
                   value={documentSearch}
                   onChange={(event) => setDocumentSearch(event.target.value)}
-                  placeholder="Buscar por tipo, competência, empresa, status ou motivo"
+                  placeholder="Buscar por tipo, pessoa, empresa, competência, status ou motivo"
                 />
               </label>
+
               <label>
                 Ordenar por
                 <select value={documentSort} onChange={(event) => setDocumentSort(event.target.value as DocumentSort)}>
-                  {documentSortOptions.map((option) => (
-                    <option key={option.id} value={option.id}>{option.label}</option>
-                  ))}
+                  {documentSortOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
               </label>
-              <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>
-                Limpar filtros
-              </button>
+
+              <button className="document-secondary-button" type="button" onClick={clearDocumentFilters}>Limpar filtros</button>
+            </div>
+
+            <div className="document-tabs document-target-tabs" role="tablist" aria-label="Filtros de documentos por alvo">
+              {documentTargetFilterOptions.map((option) => (
+                <button
+                  key={option.id}
+                  className={activeTargetFilter === option.id ? 'document-tab active' : 'document-tab'}
+                  type="button"
+                  onClick={() => setActiveTargetFilter(option.id)}
+                  role="tab"
+                  aria-selected={activeTargetFilter === option.id}
+                >
+                  <span>{option.label}</span>
+                  <strong>{targetCounts[option.id]}</strong>
+                </button>
+              ))}
             </div>
 
             <div className="document-tabs" role="tablist" aria-label="Filtros de documentos por status">
@@ -632,7 +760,8 @@ export function DocumentsPage() {
 
             <div className="document-filter-summary">
               <strong>{filteredDocuments.length}</strong>
-              <span>de {companyFilteredDocuments.length} documentos em {activeCompanyName}</span>
+              <span>de {targetFilteredDocuments.length} documentos em {activeCompanyName}</span>
+              <span>· Alvo: {getFilterLabel(documentTargetFilterOptions, activeTargetFilter)}</span>
               <span>· Aba: {getFilterLabel(documentFilterOptions, activeDocumentFilter)}</span>
               <span>· Ordenação: {getFilterLabel(documentSortOptions, documentSort)}</span>
               {documentSearch.trim() ? <span>· Busca: “{documentSearch.trim()}”</span> : null}
@@ -643,14 +772,14 @@ export function DocumentsPage() {
         {!loading && companies.length > 0 && documents.length === 0 ? (
           <div className="documents-empty">
             <strong>Nenhum documento encontrado.</strong>
-            <span>Crie solicitações vinculadas a empresas para acompanhar a entrega mensal.</span>
+            <span>Crie solicitações vinculadas a empresas ou pessoas para acompanhar a entrega mensal.</span>
           </div>
         ) : null}
 
         {!loading && documents.length > 0 && filteredDocuments.length === 0 ? (
           <div className="documents-empty">
             <strong>Nenhum documento neste filtro.</strong>
-            <span>Troque a empresa, mude a aba de status, ajuste a busca ou crie uma nova solicitação para movimentar a fila.</span>
+            <span>Troque a empresa, mude o alvo, ajuste a aba de status, revise a busca ou crie uma nova solicitação.</span>
           </div>
         ) : null}
 
@@ -666,19 +795,19 @@ export function DocumentsPage() {
                   <div className="document-card-main">
                     <div>
                       <strong>{document.documentType}</strong>
-                      <span>Empresa: {document.company?.name || 'Empresa não informada'}</span>
+                      <span className="document-target-note">{getDocumentTargetLabel(document)}</span>
+                      <span>Empresa vinculada: {document.company?.name || 'Empresa não informada'}</span>
                       <span>Competência: {document.competence || 'Não informada'} · Vencimento: {formatDate(document.dueDate)}</span>
-                      {reviewHistoryLabel ? (
-                        <span className="document-review-history">{reviewHistoryLabel}</span>
-                      ) : null}
-                      {document.status === 'REJECTED' && document.rejectionReason ? (
-                        <span>Motivo da rejeição: {document.rejectionReason}</span>
-                      ) : null}
+                      {reviewHistoryLabel ? <span className="document-review-history">{reviewHistoryLabel}</span> : null}
+                      {document.status === 'REJECTED' && document.rejectionReason ? <span>Motivo da rejeição: {document.rejectionReason}</span> : null}
                     </div>
+
                     <div className="document-card-meta">
+                      <Badge color={document.targetType === 'PERSON' ? 'teal' : 'sky'}>{document.targetType === 'PERSON' ? 'Pessoa' : 'Empresa'}</Badge>
                       <Badge color={getStatusBadgeColor(document.status)}>{statusLabels[document.status]}</Badge>
-                      <Badge color={dueDateSignal.color}>{dueDateSignal.label}</Badge>
+                      <Badge color={getDocumentDueDateSignal(document).color}>{getDocumentDueDateSignal(document).label}</Badge>
                       <Badge color="slate">{document.files?.length || 0} arquivos</Badge>
+
                       {canReviewDocument(document.status) ? (
                         <>
                           <button
