@@ -1,7 +1,19 @@
 import { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { analyzeDocument } from '../lib/ai';
 import { env } from '../lib/env';
+import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
+
+const webhookMessageBodySchema = z.object({
+  providerMessageId: optionalNullableString,
+  phone: nonEmptyString,
+  messageType: z.enum(['TEXT', 'DOCUMENT', 'IMAGE', 'OTHER']).optional(),
+  body: optionalNullableString,
+  mediaUrl: optionalNullableString,
+  fileName: optionalNullableString,
+  mimeType: optionalNullableString
+});
 
 const whatsappRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/webhooks/whatsapp', async (request, reply) => {
@@ -10,7 +22,8 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 
-    const payload = request.body as any;
+    const payload = parseBody(webhookMessageBodySchema, request.body, reply);
+    if (!payload) return;
 
     const office = await prisma.office.findFirst();
     if (!office) {
@@ -29,7 +42,7 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
         officeId: office.id,
         clientId: client?.id ?? null,
         providerMessageId: payload.providerMessageId || '',
-        phone: payload.phone || '',
+        phone: payload.phone,
         direction: 'INCOMING',
         messageType: payload.messageType || 'TEXT',
         body: payload.body ?? null,
@@ -39,7 +52,7 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (payload.messageType === 'DOCUMENT' && payload.fileName) {
-      const ai = analyzeDocument(payload.fileName, payload.mimeType);
+      const ai = analyzeDocument(payload.fileName, payload.mimeType ?? undefined);
 
       let docRequest = null;
       if (client) {
@@ -57,7 +70,7 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
         data: {
           documentRequestId: docRequest?.id ?? null,
           filename: payload.fileName,
-          mimeType: payload.mimeType,
+          mimeType: payload.mimeType ?? 'application/octet-stream',
           storageKey: payload.mediaUrl || ''
         }
       });

@@ -1,7 +1,19 @@
 import { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
 import { getIdParam } from '../lib/http';
+import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
+
+const createClientBodySchema = z.object({
+  name: nonEmptyString,
+  phone: optionalNullableString
+});
+
+const updateClientBodySchema = z.object({
+  name: nonEmptyString.optional(),
+  phone: optionalNullableString
+}).refine((data) => Object.keys(data).length > 0, 'At least one field is required');
 
 const clientsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/clients', { preHandler: authMiddleware }, async (request) => {
@@ -30,11 +42,13 @@ const clientsRoutes: FastifyPluginAsync = async (app) => {
     return client;
   });
 
-  app.post('/api/clients', { preHandler: authMiddleware }, async (request) => {
+  app.post('/api/clients', { preHandler: authMiddleware }, async (request, reply) => {
+    const body = parseBody(createClientBodySchema, request.body, reply);
+    if (!body) return;
+
     const { officeId } = request.user;
-    const { name, phone } = request.body as any;
     const client = await prisma.client.create({
-      data: { officeId, name, phone }
+      data: { officeId, name: body.name, phone: body.phone ?? null }
     });
     return client;
   });
@@ -43,13 +57,15 @@ const clientsRoutes: FastifyPluginAsync = async (app) => {
     const id = getIdParam(request.params, reply);
     if (!id) return;
 
+    const body = parseBody(updateClientBodySchema, request.body, reply);
+    if (!body) return;
+
     const { officeId } = request.user;
-    const data = request.body as any;
     const existing = await prisma.client.findFirst({ where: { id, officeId } });
     if (!existing) return reply.code(404).send({ error: 'Client not found' });
     const updated = await prisma.client.update({
       where: { id },
-      data: { name: data.name ?? existing.name, phone: data.phone ?? existing.phone }
+      data: { name: body.name ?? existing.name, phone: body.phone !== undefined ? body.phone : existing.phone }
     });
     return updated;
   });

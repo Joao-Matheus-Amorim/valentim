@@ -20,14 +20,43 @@ const allowedOrigins = [
   'https://valentim-swart.vercel.app'
 ];
 
+function getErrorStatusCode(error: unknown) {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'statusCode' in error &&
+    typeof error.statusCode === 'number' &&
+    error.statusCode >= 400
+  ) {
+    return error.statusCode;
+  }
+
+  return 500;
+}
+
+function getErrorMessage(error: unknown, statusCode: number) {
+  if (statusCode >= 500) return 'Internal server error';
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+
+  return 'Request failed';
+}
+
 export function buildApp() {
   const app = Fastify({ logger: true });
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ err: error, method: request.method, url: request.url });
 
-    const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
-    const message = statusCode >= 500 ? 'Internal server error' : error.message;
+    const statusCode = getErrorStatusCode(error);
+    const message = getErrorMessage(error, statusCode);
 
     return reply.code(statusCode).send({ error: message });
   });
