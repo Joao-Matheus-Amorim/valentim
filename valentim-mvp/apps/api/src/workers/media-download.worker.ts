@@ -102,10 +102,54 @@ async function uploadToR2(key: string, buffer: Buffer, contentType: string): Pro
 // Persistência da análise real
 // ---------------------------------------------------------------------------
 
-async function upsertAiAnalysisFromResult(documentFileId: string, result: Awaited<ReturnType<typeof analyzeDocument>>) {
+async function matchPendingDocumentRequest(input: {
+  documentFileId: string;
+  clientId?: string | null;
+  documentType: string;
+}) {
   const file = await prisma.documentFile.findUnique({
-    where: { id: documentFileId },
+    where: { id: input.documentFileId },
     select: { documentRequestId: true }
+  });
+
+  if (file?.documentRequestId) {
+    return file.documentRequestId;
+  }
+
+  if (!input.clientId) {
+    return null;
+  }
+
+  const request = await prisma.documentRequest.findFirst({
+    where: {
+      company: { clientId: input.clientId },
+      documentType: input.documentType,
+      status: 'PENDING'
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  if (!request) {
+    return null;
+  }
+
+  await prisma.documentFile.update({
+    where: { id: input.documentFileId },
+    data: { documentRequestId: request.id }
+  });
+
+  return request.id;
+}
+
+async function upsertAiAnalysisFromResult(
+  documentFileId: string,
+  result: Awaited<ReturnType<typeof analyzeDocument>>,
+  clientId?: string | null
+) {
+  const documentRequestId = await matchPendingDocumentRequest({
+    documentFileId,
+    clientId,
+    documentType: result.documentType
   });
 
   const existing = await prisma.aIAnalysis.findFirst({
@@ -114,7 +158,7 @@ async function upsertAiAnalysisFromResult(documentFileId: string, result: Awaite
   });
 
   const data = {
-    documentRequestId: file?.documentRequestId ?? null,
+    documentRequestId,
     documentFileId,
     documentType: result.documentType,
     competence: result.competence,
@@ -131,10 +175,16 @@ async function upsertAiAnalysisFromResult(documentFileId: string, result: Awaite
       where: { id: existing.id },
       data
     });
-    return;
+  } else {
+    await prisma.aIAnalysis.create({ data });
   }
 
-  await prisma.aIAnalysis.create({ data });
+  if (documentRequestId) {
+    await prisma.documentRequest.update({
+      where: { id: documentRequestId },
+      data: { status: 'SENT' }
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +209,7 @@ function buildStorageKey(documentFileId: string, filename: string): string {
 }
 
 async function processMediaDownload(job: Job<MediaDownloadJobData>) {
-  const { documentFileId, metaMediaId, filename, mimeType } = job.data;
+  const { documentFileId, metaMediaId, filename, mimeType, clientId } = job.data;
 
   job.log(`Iniciando download — media ID: ${metaMediaId}`);
 
@@ -185,7 +235,7 @@ async function processMediaDownload(job: Job<MediaDownloadJobData>) {
 
   await job.updateProgress(82);
   const aiResult = await analyzeDocument(buffer, finalContentType, filename);
-  await upsertAiAnalysisFromResult(documentFileId, aiResult);
+  await upsertAiAnalysisFromResult(documentFileId, aiResult, clientId);
   job.log(`Análise IA concluída — ${aiResult.model} / confiança ${aiResult.confidence}`);
 
   await job.updateProgress(100);
