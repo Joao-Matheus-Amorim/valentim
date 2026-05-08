@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { env } from '../lib/env';
 import { mediaDownloadQueue } from '../lib/queue';
 import { sendWhatsAppText } from '../lib/whatsapp-meta';
+import { normalizeEvolutionPayload } from '../lib/whatsapp-evolution-adapter';
 import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
 
 const webhookMessageBodySchema = z.object({
@@ -176,14 +177,15 @@ async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
     return { queued: false as const, acknowledgement };
   }
 
-  const metaMediaId = payload.mediaId ?? payload.metaMediaId ?? payload.mediaUrl;
+  const metaMediaId = payload.metaMediaId ?? payload.mediaId;
+  const mediaUrl = payload.mediaUrl ?? null;
 
-  if (!metaMediaId) {
+  if (!metaMediaId && !mediaUrl) {
     const acknowledgement = await sendAcknowledgement(
       payload.phone,
       'Recebi um documento, mas nao consegui identificar o arquivo. Pode reenviar como documento PDF?'
     );
-    return { queued: false as const, error: 'Document media id is required', acknowledgement };
+    return { queued: false as const, error: 'Document media id or media URL is required', acknowledgement };
   }
 
   const fileRecord = await prisma.documentFile.create({
@@ -200,6 +202,7 @@ async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
     {
       documentFileId: fileRecord.id,
       metaMediaId,
+      mediaUrl,
       filename: payload.fileName,
       mimeType: payload.mimeType ?? 'application/octet-stream',
       clientId: client?.id ?? null,
@@ -233,6 +236,13 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/api/webhooks/whatsapp', async (request, reply) => {
+    const evolutionMessage = normalizeEvolutionPayload(request.body);
+
+    if (evolutionMessage) {
+      const result = await processNormalizedMessage(evolutionMessage);
+      return { received: true, provider: 'evolution', result };
+    }
+
     const incoming = request.headers['x-webhook-secret'];
     const normalizedMessages = [
       ...normalizeMetaWebhookPayload(request.body),
