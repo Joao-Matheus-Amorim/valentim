@@ -1,11 +1,11 @@
 import { buildApp } from './app';
+import { env } from './lib/env';
 
-const port = Number(process.env.PORT) || 3333;
 const app = buildApp();
 
-app.listen({ port, host: '0.0.0.0' })
+app.listen({ port: env.PORT, host: '0.0.0.0' })
   .then(() => {
-    console.log(`Server listening on ${port}`);
+    console.log(`Server listening on ${env.PORT}`);
   })
   .catch((err) => {
     console.error(err);
