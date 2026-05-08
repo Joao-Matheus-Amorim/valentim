@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
+import { getIdParam } from '../lib/http';
 
 const deadlinesRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/deadlines', { preHandler: authMiddleware }, async (request) => {
@@ -24,8 +25,10 @@ const deadlinesRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put('/api/deadlines/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const data = request.body as any;
     const existing = await prisma.deadline.findFirst({
       where: { id, company: { client: { officeId } } }
@@ -44,8 +47,10 @@ const deadlinesRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete('/api/deadlines/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const existing = await prisma.deadline.findFirst({
       where: { id, company: { client: { officeId } } }
     });
