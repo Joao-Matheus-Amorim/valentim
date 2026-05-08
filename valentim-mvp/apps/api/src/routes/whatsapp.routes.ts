@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { env } from '../lib/env';
 import { mediaDownloadQueue } from '../lib/queue';
+import { normalizeEvolutionPayload } from '../lib/whatsapp-evolution-adapter';
 import { nonEmptyString, optionalNullableString, parseBody } from '../lib/validation';
 
 const webhookMessageBodySchema = z.object({
@@ -163,10 +164,11 @@ async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
     return { queued: false as const };
   }
 
-  const metaMediaId = payload.mediaId ?? payload.metaMediaId ?? payload.mediaUrl;
+  const metaMediaId = payload.metaMediaId ?? payload.mediaId;
+  const mediaUrl = payload.mediaUrl ?? null;
 
-  if (!metaMediaId) {
-    return { queued: false as const, error: 'Document media id is required' };
+  if (!metaMediaId && !mediaUrl) {
+    return { queued: false as const, error: 'Document media id or media URL is required' };
   }
 
   const fileRecord = await prisma.documentFile.create({
@@ -183,6 +185,7 @@ async function processNormalizedMessage(payload: NormalizedWebhookMessage) {
     {
       documentFileId: fileRecord.id,
       metaMediaId,
+      mediaUrl,
       filename: payload.fileName,
       mimeType: payload.mimeType ?? 'application/octet-stream',
       clientId: client?.id ?? null,
@@ -211,6 +214,13 @@ const whatsappRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/api/webhooks/whatsapp', async (request, reply) => {
+    const evolutionMessage = normalizeEvolutionPayload(request.body);
+
+    if (evolutionMessage) {
+      const result = await processNormalizedMessage(evolutionMessage);
+      return { received: true, provider: 'evolution', result };
+    }
+
     const incoming = request.headers['x-webhook-secret'];
     const normalizedMessages = [
       ...normalizeMetaWebhookPayload(request.body),
