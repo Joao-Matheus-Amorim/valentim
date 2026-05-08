@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
+import { getIdParam } from '../lib/http';
 
 const REUPLOAD_TASK_SOURCE = 'document-review-reupload';
 
@@ -83,8 +84,10 @@ async function createOrUpdateReuploadTask(input: {
 
 const reviewRoutes: FastifyPluginAsync = async (app) => {
   app.put('/api/documents/:id/review', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId, userId } = request.user;
-    const { id } = request.params as any;
     const { action, reason } = request.body as any;
 
     const doc = await prisma.documentRequest.findFirst({

@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
+import { getIdParam } from '../lib/http';
 
 const proposalsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/proposals', { preHandler: authMiddleware }, async (request) => {
@@ -24,8 +25,10 @@ const proposalsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put('/api/proposals/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const data = request.body as any;
     const existing = await prisma.proposal.findFirst({
       where: { id, client: { officeId } }
@@ -45,8 +48,10 @@ const proposalsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete('/api/proposals/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const existing = await prisma.proposal.findFirst({
       where: { id, client: { officeId } }
     });

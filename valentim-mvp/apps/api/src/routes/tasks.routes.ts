@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
+import { getIdParam } from '../lib/http';
 
 const taskStatuses = [
   'PENDING', 'IN_PROGRESS', 'WAITING_CLIENT',
@@ -86,8 +87,10 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/api/tasks/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const task = await prisma.task.findFirst({
       where: { id, officeId },
       include: includeRelations
@@ -133,8 +136,10 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put('/api/tasks/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const data = request.body as any;
 
     const existing = await prisma.task.findFirst({ where: { id, officeId } });
@@ -156,7 +161,9 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
     const nextStatus = data.status ? normalizeStatus(data.status) : existing.status;
     const nextPriority = data.priority ? normalizePriority(data.priority) : existing.priority;
     const completedAt =
-      nextStatus === 'DONE' && existing.status !== 'DONE' ? new Date() : existing.completedAt;
+      nextStatus === 'DONE'
+        ? existing.status !== 'DONE' ? new Date() : existing.completedAt
+        : null;
 
     return prisma.task.update({
       where: { id: existing.id },
@@ -178,8 +185,10 @@ const tasksRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete('/api/tasks/:id', { preHandler: authMiddleware }, async (request, reply) => {
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
     const { officeId } = request.user;
-    const { id } = request.params as any;
     const existing = await prisma.task.findFirst({ where: { id, officeId } });
     if (!existing) return reply.code(404).send({ error: 'Task not found' });
     await prisma.task.delete({ where: { id } });

@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { authMiddleware } from '../lib/auth';
+import { getIdParam } from '../lib/http';
 
 const documentInclude = {
   company: true,
@@ -21,7 +22,7 @@ function normalizeDocumentTargetType(value: unknown) {
 
 const documentsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/documents', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const documents = await prisma.documentRequest.findMany({
       where: { company: { client: { officeId } } },
       include: documentInclude
@@ -30,7 +31,7 @@ const documentsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/api/documents', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
+    const { officeId } = request.user;
     const { companyId, documentType, competence, dueDate, targetType, personId } = request.body as any;
     const normalizedTargetType = normalizeDocumentTargetType(targetType);
     const normalizedDocumentType = typeof documentType === 'string' ? documentType.trim() : '';
@@ -77,8 +78,10 @@ const documentsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/api/documents/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { officeId } = (request as any).user;
-    const { id } = request.params as any;
+    const id = getIdParam(request.params, reply);
+    if (!id) return;
+
+    const { officeId } = request.user;
     const doc = await prisma.documentRequest.findFirst({
       where: { id, company: { client: { officeId } } },
       include: { ...documentInclude, aiAnalyses: true, unmatchedDocuments: true }
