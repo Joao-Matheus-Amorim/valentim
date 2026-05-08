@@ -2,12 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import type { AuthenticatedUser } from '../types/fastify';
-
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET is required');
-}
+import { env } from './env';
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 10);
@@ -18,11 +13,11 @@ export async function comparePassword(password: string, hash: string) {
 }
 
 export function signToken(payload: AuthenticatedUser) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string): AuthenticatedUser {
-  return jwt.verify(token, JWT_SECRET) as AuthenticatedUser;
+  return jwt.verify(token, env.JWT_SECRET) as AuthenticatedUser;
 }
 
 export function authMiddleware(request: FastifyRequest, reply: FastifyReply, done: () => void) {
