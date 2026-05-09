@@ -1,7 +1,25 @@
+import { isEvolutionConfigured, sendEvolutionText } from './whatsapp-evolution';
+
 const META_API_VERSION = process.env.META_API_VERSION ?? 'v19.0';
 const META_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
+function shouldUseEvolutionAsPrimary() {
+  const provider = process.env.WHATSAPP_PROVIDER?.trim().toLowerCase();
+  const explicitPrimary = process.env.EVOLUTION_AS_PRIMARY?.trim().toLowerCase();
+
+  if (provider === 'evolution') return true;
+  if (provider === 'meta') return false;
+  if (explicitPrimary === 'true' || explicitPrimary === '1') return true;
+  if (explicitPrimary === 'false' || explicitPrimary === '0') return false;
+
+  return isEvolutionConfigured();
+}
+
 export async function sendWhatsAppText(input: { to: string; body: string }) {
+  if (shouldUseEvolutionAsPrimary()) {
+    return sendEvolutionText(input);
+  }
+
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
